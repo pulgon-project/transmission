@@ -85,7 +85,7 @@ if __name__ == "__main__":
         "-t3",
         "--means_tol",
         type=float,
-        default=7e-1,
+        default=1e-1,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
              " it a propagating mode",
     )
@@ -343,21 +343,21 @@ if __name__ == "__main__":
                 if hi > lo + 1:
                     tmp_value = np.abs(np.angle(values[lo]) / aL)
                     tmp_itp = np.where(k_unique==tmp_value)[0]
+                    # adapted_k = adapted[tmp_itp.item()]
+
                     if tmp_itp.size == 0:
                         vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
                     elif tmp_itp.size == 1:
-                        vectors_map1 = vectors[:, 1] @ adapted[tmp_itp.item()]
-                        vectors_map2 = vectors[:, 2] @ adapted[tmp_itp.item()]
-                        vectors_map = np.hstack((vectors_map1, vectors_map2))
-
+                        vectors_map1 = vectors[:, lo:hi].T @ adapted[tmp_itp.item()]
 
                         means1 = (devide_irreps(vectors[:, lo:hi].T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()]) > args.means_tol)
                         means2 = (devide_irreps(la.orth(vectors[:, lo:hi]).T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()]) > args.means_tol)
-                        means3 = (devide_irreps(la.orth(vectors_map).T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()]) > args.means_tol)
-                        # means4 = (devide_irreps(vectors_map, adapted[tmp_itp.item()], dimensions[tmp_itp.item()]) > args.means_tol)
-
+                        means3 = (devide_irreps(vectors_map1, adapted[tmp_itp.item()], dimensions[tmp_itp.item()]) > args.means_tol)
                         set_trace()
-                        vectors[:, lo:hi] = la.orth(vectors_map.T)
+
+                        # means3 = (devide_irreps(la.orth(vectors_map).T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()]) > args.means_tol)
+                        # means4 = (devide_irreps(vectors_map, adapted[tmp_itp.item()], dimensions[tmp_itp.item()]) > args.means_tol)
+                        # vectors[:, lo:hi] = la.orth(vectors_map.T)
 
                     else:
                         logging.ERROR("the size of itp not correct")
@@ -385,13 +385,13 @@ if __name__ == "__main__":
         # mask_Ladvm = np.isclose(np.abs(ALadvm), 1.0, args.rtol)
         # mask_Radvm = np.isclose(np.abs(ARadvm), 1.0, args.rtol)
 
+        ALadvm, ULadvm, mask_Ladvm = orthogonalize(*la.eig(inv_FLadvm), nrot, order, family, aL, num_atoms, matrices)
         ALretp, ULretp, mask_Lretp = orthogonalize(*la.eig(FLretp), nrot, order, family, aL, num_atoms, matrices)
         ARretp, URretp, mask_Rretp = orthogonalize(*la.eig(FRretp), nrot, order, family, aL, num_atoms, matrices)
         ALadvp, ULadvp, mask_Ladvp = orthogonalize(*la.eig(FLadvp), nrot, order, family, aL, num_atoms, matrices)
         ARadvp, URadvp, mask_Radvp = orthogonalize(*la.eig(FRadvp), nrot, order, family, aL, num_atoms, matrices)
         ALretm, ULretm, mask_Lretm = orthogonalize(*la.eig(inv_FLretm), nrot, order, family, aL, num_atoms, matrices)
         ARretm, URretm, mask_Rretm = orthogonalize(*la.eig(inv_FRretm), nrot, order, family, aL, num_atoms, matrices)
-        ALadvm, ULadvm, mask_Ladvm = orthogonalize(*la.eig(inv_FLadvm), nrot, order, family, aL, num_atoms, matrices)
         ARadvm, URadvm, mask_Radvm = orthogonalize(*la.eig(inv_FRadvm), nrot, order, family, aL, num_atoms, matrices)
 
 
