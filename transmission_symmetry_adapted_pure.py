@@ -63,7 +63,7 @@ def orthogonalize(values, vectors):
     groups = []
     while True:
         if hi >= vectors.shape[1] or not np.isclose(
-                values[hi], values[hi - 1], args.tolerance
+                np.angle(values[hi]), np.angle(values[hi - 1]), args.tolerance
         ):
             groups.append((lo, hi))
             lo = hi
@@ -80,7 +80,7 @@ def orthogonalize(values, vectors):
 
 
 matplotlib.rcParams["font.size"] = 16.0
-NPOINTS = 101
+NPOINTS = 50
 
 
 if __name__ == "__main__":
@@ -162,8 +162,8 @@ if __name__ == "__main__":
     nrot = obj.get_rotational_symmetry_number()
 
     sym = []
-    tran = SymmOp.from_rotation_and_translation(np.eye(3), [0, 0, 1])
-    sym.append(tran.affine_matrix)
+    # tran = SymmOp.from_rotation_and_translation(np.eye(3), [0, 0, 1])
+    # sym.append(tran.affine_matrix)
     pg1 = obj.get_generators()    # change the order to satisfy the character table
     sym.append(pg1[1])
     ops, order = brute_force_generate_group_subsquent(sym)

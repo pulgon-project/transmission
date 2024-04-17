@@ -40,32 +40,36 @@ def unit_basis_complex_vectors(complex_vectors):
 
 
 def get_adapted_matrix(qpoints, nrot, order, family, a, num_atom, matrices):
-    characters, paras_values, paras_symbols = get_character(qpoints, nrot, order, family, a)
-    characters = np.array(characters)
+    adapteds, dimensions = [], []
+    for qp in qpoints:
+        characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
+        characters = np.array(characters)
+        characters = characters[::2] + characters[1::2]   # depend on the dimension of the character
 
-    characters = characters[::2] + characters[1::2]   # depend on the dimension of the character
+        ndof = 3 * num_atom
+        remaining_dof = copy.deepcopy(ndof)
+        adapted = []
+        dimension = []
+        for ii, chara in enumerate(characters):  # loop quantum number
+            projector = np.zeros((ndof, ndof), dtype=np.complex128)
+            # prefactor = chara[0].real / len(chara)
+            for kk in range(len(chara)):  # loop ops
+                # projector += prefactor * chara[kk] * matrices[kk]
+                projector += chara[kk] * matrices[kk]
+            basis = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+            adapted.append(basis)
+            remaining_dof -= basis.shape[1]
+            dimension.append(basis.shape[1])
+        adapted = np.concatenate(adapted, axis=1)
+        adapteds.append(adapted)
+        dimensions.append(dimension)
 
-    ndof = 3 * num_atom
-    remaining_dof = copy.deepcopy(ndof)
-    adapted = []
-    dimensions = []
-    for ii, chara in enumerate(characters):  # loop quantum number
-        projector = np.zeros((ndof, ndof), dtype=np.complex128)
-        # prefactor = chara[0].real / len(chara)
-        for kk in range(len(chara)):  # loop ops
-            # projector += prefactor * chara[kk] * matrices[kk]
-            projector += chara[kk] * matrices[kk]
-        basis = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
-        adapted.append(basis)
-        remaining_dof -= basis.shape[1]
-        dimensions.append(basis.shape[1])
-    adapted = np.concatenate(adapted, axis=1)
-    if adapted.shape[0] != adapted.shape[1]:
-        print(ii, adapted.shape)
-        print(dimensions)
-        set_trace()
-        logging.ERROR("the shape of adapted not equal")
-    return adapted, dimensions
+        if adapted.shape[0] != adapted.shape[1]:
+            print(ii, adapted.shape)
+            print(dimension)
+            set_trace()
+            logging.ERROR("the shape of adapted not equal")
+    return adapteds, dimensions
 
 
 def devide_irreps(vec, adapted, dimensions):

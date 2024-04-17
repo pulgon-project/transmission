@@ -337,7 +337,6 @@ if __name__ == "__main__":
                     vectors[:, lo:hi] = la.orth(vectors[:, lo:hi], rcond=1e-3)
             return values, vectors
 
-
         # Solve the corresponding eigenvalue equations for the leads.
         # Look for degenerate modes and orthonormalize them.
         ALretp, ULretp = orthogonalize(*la.eig(FLretp))
@@ -348,7 +347,6 @@ if __name__ == "__main__":
         ARretm, URretm = orthogonalize(*la.eig(inv_FRretm))
         ALadvm, ULadvm = orthogonalize(*la.eig(inv_FLadvm))
         ARadvm, URadvm = orthogonalize(*la.eig(inv_FRadvm))
-
 
         # Find out which modes are propagating.
         mask_Lretp = np.isclose(np.abs(ALretp), 1.0, args.rtol)
@@ -483,7 +481,6 @@ if __name__ == "__main__":
         )
 
         #  Discard evanescent modes.
-
         tRL = tRL[mask_Rretp, :][:, mask_Ladvm]
         trans_modes = np.diag(tRL.conj().T @ tRL)
 
@@ -510,7 +507,6 @@ if __name__ == "__main__":
         print("k_w_unique: ", k_w_unique)
         # trs1 = np.diag(tRL.conj().T @ tRL).real
         # trs2 = np.abs(np.diag(tRL.conj().T @ tRL))
-        
         tmp_transmission_prob, tmp_irreps, tmp_idx = [], [], []
         for ik, tmp_k in enumerate(k_w_unique):
             print("k=", tmp_k)
@@ -545,7 +541,6 @@ if __name__ == "__main__":
                     probabilities = trans_modes[itp2].real  @ paras_abs
                     tmp_irreps.extend(irps)
                     tmp_transmission_prob.extend(probabilities)
-
                     if len(irps) != len(probabilities):
                         if (len(probabilities)-len(irps))==1:
                             paras_abs = np.vstack((paras_abs, paras_last))
@@ -593,7 +588,6 @@ if __name__ == "__main__":
                                     probabilities_last = irps_last @ trans_modes[itp2][tmp_itp].real
                                     tmp_irreps.extend(irps_last)
                                     tmp_transmission_prob.extend(probabilities_last)
-
                                 else:
                                     set_trace()
                                     logging.Error("number of modes - num of Irreps > 1")
@@ -622,7 +616,6 @@ if __name__ == "__main__":
                     axs[i, j].set_xticklabels(Irreps[k])
                     axs[i, j].set_yticks(np.arange(len(Irreps[k])))
                     axs[i, j].set_yticklabels(Irreps[k])
-
                 else:
                     axs[i, j].axis("off")
                 axs[i, j].text(
@@ -648,6 +641,7 @@ if __name__ == "__main__":
     # fig1, ax1 = plt.subplots()
     color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'yellow', 'pink']
     labels = ["|m|=0","|m|=1","|m|=2","|m|=3","|m|=4","|m|=5","|m|=6","|m|=7","|m|=8","|m|=9"]
+
     NLp_irreps = np.array([NLp_irreps[2],NLp_irreps[1]+NLp_irreps[3],NLp_irreps[0]+NLp_irreps[4],NLp_irreps[5]])
     for ii, freq in enumerate(NLp_irreps):
         plt.plot(np.array(inc_omega), freq, label=labels[ii], color=color[ii])

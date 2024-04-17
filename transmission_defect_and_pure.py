@@ -251,7 +251,7 @@ if __name__ == "__main__":
             groups = []
             while True:
                 if hi >= vectors.shape[1] or not np.isclose(
-                    values[hi], values[hi - 1], args.tolerance
+                    np.angle(values[hi]), np.angle(values[hi - 1]), args.tolerance
                 ):
                     groups.append((lo, hi))
                     lo = hi
@@ -451,37 +451,37 @@ if __name__ == "__main__":
         if not np.isclose(trans_check[iomega], trans[iomega], atol=1.0):
             print("Problem at omega={} rad/ps".format(inc_omega[iomega]))
 
-    if True and NPOINTS == 50:
-        fsize = matplotlib.rcParams["font.size"]
-        fig, axs = plt.subplots(5, 10, figsize=(16, 10))
-        for i in range(5):
-            for j in range(10):
-                k = 10 * i + j
-                if matrices[k].size > 0:
-                    im = axs[i, j].matshow(matrices[k], vmin=0.0, vmax=1.0)
-                    axs[i, j].set_xticks([])
-                    axs[i, j].set_yticks([])
-                else:
-                    axs[i, j].axis("off")
-                axs[i, j].text(
-                    0.5,
-                    0.5,
-                    r"${0:.2f}$".format(inc_omega[k]),
-                    horizontalalignment="center",
-                    verticalalignment="center",
-                    transform=axs[i, j].transAxes,
-                    fontdict=dict(size=fsize / 1.2, color="red", weight="bold"),
-                )
-
-        # print(f"omega = {inc_omega[iomega]:f} rad/ps")
-        # print(f"\tShape: {probabilities.shape}")
-        # print(f"\tTotal transmission: {trans[iomega]:f}")
-        # plt.colorbar()
-        plt.tight_layout()
-        plt.subplots_adjust(hspace=1e-3, wspace=1e-3, right=0.9)
-        cbar_ax = fig.add_axes([0.95, 0.05, 0.02, 0.9])
-        fig.colorbar(im, cax=cbar_ax)
-        plt.savefig(os.path.join(path_directory, "section.png"), dpi=600)
+    # if True and NPOINTS == 50:
+    #     fsize = matplotlib.rcParams["font.size"]
+    #     fig, axs = plt.subplots(5, 10, figsize=(16, 10))
+    #     for i in range(5):
+    #         for j in range(10):
+    #             k = 10 * i + j
+    #             if matrices[k].size > 0:
+    #                 im = axs[i, j].matshow(matrices[k], vmin=0.0, vmax=1.0)
+    #                 axs[i, j].set_xticks([])
+    #                 axs[i, j].set_yticks([])
+    #             else:
+    #                 axs[i, j].axis("off")
+    #             axs[i, j].text(
+    #                 0.5,
+    #                 0.5,
+    #                 r"${0:.2f}$".format(inc_omega[k]),
+    #                 horizontalalignment="center",
+    #                 verticalalignment="center",
+    #                 transform=axs[i, j].transAxes,
+    #                 fontdict=dict(size=fsize / 1.2, color="red", weight="bold"),
+    #             )
+    #
+    #     # print(f"omega = {inc_omega[iomega]:f} rad/ps")
+    #     # print(f"\tShape: {probabilities.shape}")
+    #     # print(f"\tTotal transmission: {trans[iomega]:f}")
+    #     # plt.colorbar()
+    #     plt.tight_layout()
+    #     plt.subplots_adjust(hspace=1e-3, wspace=1e-3, right=0.9)
+    #     cbar_ax = fig.add_axes([0.95, 0.05, 0.02, 0.9])
+    #     fig.colorbar(im, cax=cbar_ax)
+    #     plt.savefig(os.path.join(path_directory, "section.png"), dpi=600)
 
 
     fig1, axs1 = plt.subplots()
