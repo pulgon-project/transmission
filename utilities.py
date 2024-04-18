@@ -58,6 +58,7 @@ def get_adapted_matrix(qpoints, nrot, order, family, a, num_atom, matrices):
                 projector += chara[kk] * matrices[kk]
             basis = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
             adapted.append(basis)
+
             remaining_dof -= basis.shape[1]
             dimension.append(basis.shape[1])
         adapted = np.concatenate(adapted, axis=1)
@@ -88,6 +89,23 @@ def devide_irreps(vec, adapted, dimensions):
     if means.ndim > 1:
         means = means.T
     return np.array(means)
+
+def divide_irreps2(vec, adapted, dimensions):
+    tmp1 = vec @ adapted.conj()
+    start = 0
+    means = []
+    for im, dim in enumerate(dimensions):
+        end = start + dim
+        if vec.ndim == 1:
+            means.append((np.abs(tmp1[start:end]) ** 2).sum())
+        else:
+            means.append((np.abs(tmp1[:, start:end]) ** 2).sum(axis=1))
+        start = copy.copy(end)
+    means = np.array(means)
+    if means.ndim > 1:
+        means = means.T
+    return np.array(means)
+
 
 
 def refine_qpoints(values, tol=1e-2):
