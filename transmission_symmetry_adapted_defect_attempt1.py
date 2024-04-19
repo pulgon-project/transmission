@@ -38,6 +38,7 @@ from pulgon_tools_wip.utils import (
     find_axis_center_of_nanotube,
     dimino_affine_matrix_and_subsquent,
     Cn,
+    S2n,
     sigmaH,
     brute_force_generate_group_subsquent,
 )
@@ -77,7 +78,7 @@ if __name__ == "__main__":
         "-t2",
         "--atol",
         type=float,
-        default=4e-3,
+        default=1e-2,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
              " it a propagating mode",
     )
@@ -146,20 +147,21 @@ if __name__ == "__main__":
 
     sym = []
     # tran = SymmOp.from_rotation_and_translation(np.eye(3), [0, 0, 1])
-    tran = SymmOp.from_rotation_and_translation(Cn(2 * nrot), [0, 0, 1 / 2])
-    # pg1 = obj.get_generators()    # change the order to satisfy the character table
-    # sym.append(pg1[1])
-    S12 = np.array([[0.8660254, -0.5, 0., 0.],
-                    [0.5, 0.8660254, 0., 0.],
-                    [0., 0., -1., 0.],
-                    [0., 0., 0., 1.]])
-    sym.append(S12)
+    # tran = SymmOp.from_rotation_and_translation(Cn(2 * nrot), [0, 0, 1 / 2])
+    pg1 = obj.get_generators()    # change the order to satisfy the character table
+    sym.append(pg1[1])
+
+    # S12 = np.array([[0.8660254, -0.5, 0., 0.],
+    #                 [0.5, 0.8660254, 0., 0.],
+    #                 [0., 0., -1., 0.],
+    #                 [0., 0., 0., 1.]])
+    # sym.append(S12)
     # set_trace()
     # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
     # sym.append(mirror.affine_matrix)
 
-    ops, order = brute_force_generate_group_subsquent(sym)
-    if len(ops) != len(order):
+    ops, order_ops = brute_force_generate_group_subsquent(sym)
+    if len(ops) != len(order_ops):
         logging.ERROR("len(ops) != len(order)")
 
     ops_car_sym = []
@@ -169,8 +171,6 @@ if __name__ == "__main__":
         )
         ops_car_sym.append(tmp_sym)
     matrices = get_matrices(atom_center, ops_car_sym)
-
-    # set_trace()
 
     num_atoms = len(phonon.primitive.numbers)
 
@@ -223,10 +223,6 @@ if __name__ == "__main__":
 
     trans = np.zeros_like(inc_omega)
     trans_check = np.zeros_like(inc_omega)
-    # NLp = np.empty_like(inc_omega)
-    # NRp = np.empty_like(inc_omega)
-    # NLm = np.empty_like(inc_omega)
-    # NRm = np.empty_like(inc_omega)
 
     HL_complex = HL.astype(complex)
     TL_complex = TL.astype(complex)
@@ -308,8 +304,38 @@ if __name__ == "__main__":
             GRLret @ (GRLret @ GammaL.conj().T).conj().T @ GammaR
         ).real
 
+        values, vectors = la.eig(FLretp)
+        modules = np.abs(values)
+        order_val = np.argsort(-modules)
+        values = np.copy(values[order_val])
+        lo = 0
+        hi = 1
+        groups = []
+        while True:
+            if hi >= vectors.shape[1] or not np.isclose(
+                    np.angle(values[hi]), np.angle(values[hi - 1]), rtol=args.rtol, atol=args.atol,
+            ):
+                groups.append((lo, hi))
+                lo = hi
+            if hi >= vectors.shape[1]:
+                break
+            hi += 1
 
-        def orthogonalize(values, vectors, nrot, order_character, family, aL, num_atoms, matrices):
+        for g in groups:
+            lo, hi = g
+            if hi > lo + 1:
+                values[lo:hi] = values[lo:hi].mean()
+
+        mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+        irreps = []
+        if mask.sum() != 0:  # not all False
+            idx_mask_end = np.where(mask)[0][-1]
+            k_w = np.abs(np.angle(values[mask]) / aL)
+            k_adapteds = np.unique(k_w)
+            adapteds, dimensions = get_adapted_matrix(k_adapteds, nrot, order_ops, family, aL, num_atoms, matrices)
+
+
+        def orthogonalize(values, vectors, adapteds, k_adapteds):
             modules = np.abs(values)
             phases = np.angle(values)
             order = np.argsort(-modules)
@@ -332,65 +358,159 @@ if __name__ == "__main__":
                 lo, hi = g
                 if hi > lo + 1:
                     values[lo:hi] = values[lo:hi].mean()
+                    vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
 
             mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
-            k_w = np.abs(np.angle(values[mask]) / aL)
-            k_unique = np.unique(k_w)
+            irreps = []
+            if mask.sum()!=0:     # not all False
+                idx_mask_end = np.where(mask)[0][-1]
 
-            adapted, dimensions = get_adapted_matrix(k_unique, nrot, order_character, family, aL, num_atoms, matrices)
-            for g in groups:
-                lo, hi = g
+                for g in groups:
+                    lo, hi = g
 
-                if hi > lo + 1:
-                    tmp_value = np.abs(np.angle(values[lo]) / aL)
-                    tmp_itp = np.where(k_unique==tmp_value)[0]
-                    if tmp_itp.size == 0:
-                        vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
-                    elif tmp_itp.size == 1:
-                        vectors_map1 = vectors[:, lo:hi].T @ adapted[tmp_itp.item()]
-                        means1 = divide_irreps2(vectors[:, lo:hi].T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-                        dim = dimensions[tmp_itp.item()][0]
-
-                        Irreps_num = np.round(means1.sum(axis=0)).astype(np.int32)
-                        if np.abs(Irreps_num - means1.sum(axis=0)).mean() < args.means_tol :
-                            new_vec = []
-                            for ir, reps in enumerate(Irreps_num):
-                                if reps == 1:
-                                    tmp_itp1 = ir * dim
-                                    tmp_itp2 = ir * dim + reps
-                                    new_vec.append(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
-                                elif reps >=2:
-                                    tmp_itp1 = ir * dim
-                                    tmp_itp2 = ir * dim + reps
-                                    # new_vec.append(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
-                                    new_vec.append(la.orth(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]))
-
-                            new_vec = np.concatenate(new_vec, axis=1)
-                            vectors[:, lo:hi] = la.orth(new_vec)
-                            means2 = divide_irreps2(new_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-                            irreps =
-
-                        else:
+                    if hi <= idx_mask_end + 1:
+                        tmp_value = np.abs(np.angle(values[lo]) / aL)
+                        tmp_itp = np.where(np.isclose(k_adapteds,tmp_value))[0]
+                        if tmp_itp.size==0:
                             set_trace()
-                            logging.ERROR("It's not close to an integer")
+                            logging.ERROR("q points can't match")
 
-                    else:
-                        set_trace()
-                        logging.ERROR("the size of itp is incorrect")
+                        if hi == lo + 1:
+                            means1 = divide_irreps2(vectors[:, lo:hi].T, adapteds[tmp_itp.item()], dimensions[tmp_itp.item()])
+                            tmp_irreps = (means1 > args.means_tol)
+                            if tmp_irreps.sum()==1:
+                                irreps.extend(np.where(tmp_irreps)[0])
+                            else:
+                                set_trace()
+                                logging.ERROR('irreps more than one')
 
+                        elif hi > lo + 1:
+                            # if tmp_itp.size == 0:
+                            #     vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
+                            if tmp_itp.size == 1:
+                                means1 = divide_irreps2(vectors[:, lo:hi].T, adapteds[tmp_itp.item()], dimensions[tmp_itp.item()])
+                                dim = dimensions[tmp_itp.item()][0]
+
+                                Irreps_num = np.round(means1.sum(axis=0)).astype(np.int32)
+                                if np.abs(Irreps_num - means1.sum(axis=0)).mean() < args.means_tol :
+                                    new_vec = []
+                                    for ir, reps in enumerate(Irreps_num):
+                                        if reps == 1:
+                                            tmp_itp1 = ir * dim
+                                            tmp_itp2 = ir * dim + reps
+                                            new_vec.append(adapteds[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
+                                        elif reps >=2:
+                                            tmp_itp1 = ir * dim
+                                            tmp_itp2 = ir * dim + reps
+                                            new_vec.append(adapteds[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
+                                            # new_vec.append(la.orth(adapteds[tmp_itp.item()][:, tmp_itp1:tmp_itp2]))
+
+                                    new_vec = np.concatenate(new_vec, axis=1)
+                                    # set_trace()
+                                    # vectors[:, lo:hi] = new_vec
+                                    means2 = divide_irreps2(new_vec.T, adapteds[tmp_itp.item()], dimensions[tmp_itp.item()])
+
+                                    tmp_irreps = means2 > args.means_tol
+                                    if (tmp_irreps.sum(axis=1)==1).all():
+                                        irreps.extend(np.where(tmp_irreps)[1])
+                                    else:
+                                        set_trace()
+                                        logging.ERROR("not all eigvectors correspond to one irrep")
+
+                                else:
+                                    set_trace()
+                                    logging.ERROR("It's not close to an integer")
+                            else:
+                                set_trace()
+                                logging.ERROR("No correspond k within mask")
+            return values, vectors, mask, irreps
+
+        def orthogonalize1(values, vectors, adapteds, k_adapteds):
+            modules = np.abs(values)
+            phases = np.angle(values)
+            order = np.argsort(-modules)
+            values = np.copy(values[order])
+            vectors = np.copy(vectors[:, order])
+            lo = 0
+            hi = 1
+            groups = []
+
+            mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+            irreps = []
+            if mask.sum()!=0:     # not all False
+                idx_mask_end = np.where(mask)[0][-1]
+
+                for g in groups:
+                    lo, hi = g
+
+                    if hi <= idx_mask_end + 1:
+                        tmp_value = np.abs(np.angle(values[lo]) / aL)
+                        tmp_itp = np.where(k_adapteds == tmp_value)[0]
+                        if tmp_itp.size==0:
+                            set_trace()
+                            logging.ERROR("q points can't match")
+
+                        if hi == lo + 1:
+                            means1 = divide_irreps2(vectors[:, lo:hi].T, adapteds[tmp_itp.item()], dimensions[tmp_itp.item()])
+                            tmp_irreps = (means1 > args.means_tol)
+                            if tmp_irreps.sum()==1:
+                                irreps.extend(np.where(tmp_irreps)[0])
+                            else:
+                                set_trace()
+                                logging.ERROR('irreps more than one')
+
+                        elif hi > lo + 1:
+                            # if tmp_itp.size == 0:
+                            #     vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
+                            if tmp_itp.size == 1:
+                                means1 = divide_irreps2(vectors[:, lo:hi].T, adapteds[tmp_itp.item()], dimensions[tmp_itp.item()])
+                                dim = dimensions[tmp_itp.item()][0]
+
+                                Irreps_num = np.round(means1.sum(axis=0)).astype(np.int32)
+                                if np.abs(Irreps_num - means1.sum(axis=0)).mean() < args.means_tol :
+                                    new_vec = []
+                                    for ir, reps in enumerate(Irreps_num):
+                                        if reps == 1:
+                                            tmp_itp1 = ir * dim
+                                            tmp_itp2 = ir * dim + reps
+                                            new_vec.append(adapteds[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
+                                        elif reps >=2:
+                                            tmp_itp1 = ir * dim
+                                            tmp_itp2 = ir * dim + reps
+                                            # new_vec.append(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
+                                            new_vec.append(la.orth(adapteds[tmp_itp.item()][:, tmp_itp1:tmp_itp2]))
+
+                                    new_vec = np.concatenate(new_vec, axis=1)
+                                    vectors[:, lo:hi] = la.orth(new_vec)
+                                    means2 = divide_irreps2(new_vec.T, adapteds[tmp_itp.item()], dimensions[tmp_itp.item()])
+
+                                    tmp_irreps = means2 > args.means_tol
+                                    if (tmp_irreps.sum(axis=1)==1).all():
+                                        irreps.extend(np.where(tmp_irreps)[1])
+                                    else:
+                                        set_trace()
+                                        logging.ERROR("not all eigvectors correspond to one irrep")
+
+                                else:
+                                    set_trace()
+                                    logging.ERROR("It's not close to an integer")
+
+                            else:
+                                set_trace()
+                                logging.ERROR("No correspond k within mask")
             return values, vectors, mask, irreps
 
         # # Solve the corresponding eigenvalue equations for the leads.
         # # Look for degenerate modes and orthonormalize them.
+        ALretp, ULretp, mask_Lretp, _ = orthogonalize(*la.eig(FLretp), adapteds, k_adapteds)
+        ARretp, URretp, mask_Rretp, _ = orthogonalize(*la.eig(FRretp), adapteds, k_adapteds)
+        ALadvp, ULadvp, mask_Ladvp, _ = orthogonalize(*la.eig(FLadvp), adapteds, k_adapteds)
+        ARadvp, URadvp, mask_Radvp, _ = orthogonalize(*la.eig(FRadvp), adapteds, k_adapteds)
 
-        ALadvm, ULadvm, mask_Ladvm = orthogonalize(*la.eig(inv_FLadvm), nrot, order, family, aL, num_atoms, matrices)
-        ALretp, ULretp, mask_Lretp = orthogonalize(*la.eig(FLretp), nrot, order, family, aL, num_atoms, matrices)
-        ARretp, URretp, mask_Rretp = orthogonalize(*la.eig(FRretp), nrot, order, family, aL, num_atoms, matrices)
-        ALadvp, ULadvp, mask_Ladvp = orthogonalize(*la.eig(FLadvp), nrot, order, family, aL, num_atoms, matrices)
-        ARadvp, URadvp, mask_Radvp = orthogonalize(*la.eig(FRadvp), nrot, order, family, aL, num_atoms, matrices)
-        ALretm, ULretm, mask_Lretm = orthogonalize(*la.eig(inv_FLretm), nrot, order, family, aL, num_atoms, matrices)
-        ARretm, URretm, mask_Rretm = orthogonalize(*la.eig(inv_FRretm), nrot, order, family, aL, num_atoms, matrices)
-        ARadvm, URadvm, mask_Radvm = orthogonalize(*la.eig(inv_FRadvm), nrot, order, family, aL, num_atoms, matrices)
+        ALadvm, ULadvm, mask_Ladvm, tmp_irreps = orthogonalize(*la.eig(inv_FLadvm), adapteds, k_adapteds)
+        ALretm, ULretm, mask_Lretm, _ = orthogonalize(*la.eig(inv_FLretm), adapteds, k_adapteds)
+        ARretm, URretm, mask_Rretm, _ = orthogonalize(*la.eig(inv_FRretm), adapteds, k_adapteds)
+        ARadvm, URadvm, mask_Radvm, _ = orthogonalize(*la.eig(inv_FRadvm), adapteds, k_adapteds)
 
 
         # Compute the group velocity matrices.
@@ -506,44 +626,26 @@ if __name__ == "__main__":
 
         #  Discard evanescent modes.
         tRL = tRL[mask_Rretp, :][:, mask_Ladvm]
-        trans_modes = np.diag(tRL.conj().T @ tRL)
+        trans_modes = np.diag(tRL.conj().T @ tRL).real
+        trans_check[iomega] = trans_modes.sum()
 
-        set_trace()
-        # tRL2 = tRL[mask_Rretp, :][:, mask_Ladvm][:2,:2]
-        # trans_modes2 = np.diag(tRL2.conj().T @ tRL2)
-        trans_check[iomega] = trans_modes.sum().real
-
-        eigvec_modes = ULadvm[:, mask_Ladvm]
-        if eigvec_modes.ndim > 1:
-            eigvec_modes = eigvec_modes.T
         print("---------- -----------")
         print("omega=", omega)
-        k_w = np.abs(np.angle(ALadvm[mask_Ladvm]) / aL)
-
-        k_w_unique = np.unique(k_w)
-        print("k_w: ", k_w)
-        print("k_w_unique: ", k_w_unique)
-        tmp_transmission_prob, tmp_irreps, tmp_idx = [], [], []
-        for ik, tmp_k in enumerate(k_w_unique):
-            print("k=", tmp_k)
 
 
-
-
-
-        matrices_prob.append(np.diag(tmp_transmission_prob))
+        matrices_prob.append(np.diag(trans_modes))
         Irreps.append(np.array(tmp_irreps) - 2)
-        for im, tras in enumerate(tmp_transmission_prob):
-            try:
-                NLp_irreps[tmp_irreps[im], iomega] += tras
-            except:
-                set_trace()
+        for im, tras in enumerate(trans_modes):
+            NLp_irreps[tmp_irreps[im], iomega] += tras
+
+        set_trace()
+
     NLp_sum = NLp_irreps.sum(axis=0)
 
     if True and NPOINTS == 50:
         fsize = matplotlib.rcParams["font.size"]
         # fig, axs = plt.subplots(5, 10, figsize=(16, 10))
-        fig, axs = plt.subplots(5, 10, figsize=(24, 16))
+        fig, axs = plt.subplots(5, 10, figsize=(18, 12))
         for i in range(5):
             for j in range(10):
                 k = 10 * i + j
