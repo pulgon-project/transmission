@@ -363,36 +363,40 @@ if __name__ == "__main__":
                                 dim = dimensions[tmp_itp.item()][0]
 
                                 Irreps_num = np.round(means1.sum(axis=0)).astype(np.int32)
+
+
                                 if np.abs(Irreps_num - means1.sum(axis=0)).mean() < args.means_tol :
                                     new_vec = []
                                     for ir, reps in enumerate(Irreps_num):
-                                        if reps == 1:
+                                        if reps == 1:     # only one vector is needed in this irreps subspace
                                             tmp_itp1 = ir * dim
                                             tmp_itp2 = ir * dim + dim
 
-                                            tmp1 = ((vectors[:, lo:hi].sum(axis=1) @ adapted[tmp_itp.item()]))
-                                            tmp2 = tmp1[tmp_itp1:tmp_itp2]
-                                            # tmp3 = (tmp2[np.newaxis,:] * la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]).T)
+                                            # tmp1 = ((vectors[:, lo:hi].sum(axis=1) @ adapted[tmp_itp.item()]))
+                                            tmp1 = ((vectors[:, lo:hi].T @ adapted[tmp_itp.item()]))
+                                            tmp2 = tmp1[:, tmp_itp1:tmp_itp2].sum(axis=0)
                                             tmp3 = tmp2[np.newaxis,:] * adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]
                                             tmp_vec = la.orth(tmp3.sum(axis=1)[:,np.newaxis])
+                                            # tmp_vec = tmp3.sum(axis=1)[:,np.newaxis]
                                             tmp_means = divide_irreps2(tmp_vec.T[0], adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
 
                                             new_vec.append(tmp_vec)
                                         elif reps >=2:
                                             tmp_itp1 = ir * dim
                                             tmp_itp2 = ir * dim + dim
-                                            
-                                            tmp1 = (vectors[:, lo:hi].sum(axis=1) @ adapted[tmp_itp.item()])
-                                            tmp2 = tmp1[tmp_itp1:tmp_itp2]
+
+                                            # set_trace()
+                                            tmp1 = (vectors[:, lo:hi].T @ adapted[tmp_itp.item()])
+                                            tmp2 = tmp1[:,tmp_itp1:tmp_itp2].sum(axis=0)
                                             # tmp3 = (tmp2[np.newaxis,:] * la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]).T)
                                             tmp3 = tmp2[np.newaxis,:] * adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]
                                             # tmp_vec = tmp3.sum(axis=1)[:,np.newaxis]
                                             tmp_vec = la.orth(tmp3[:,:reps])
-
                                             tmp_means = divide_irreps2(tmp_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
 
                                             new_vec.append(tmp_vec)
                                     new_vec = np.concatenate(new_vec, axis=1)
+
                                     vectors[:, lo:hi] = new_vec
                                     means2 = divide_irreps2(new_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
                                     # set_trace()
@@ -405,7 +409,6 @@ if __name__ == "__main__":
                                 else:
                                     set_trace()
                                     logging.ERROR("It's not close to an integer")
-
                             else:
                                 set_trace()
                                 logging.ERROR("No corresponding k within mask")
