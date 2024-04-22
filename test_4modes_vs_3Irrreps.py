@@ -327,6 +327,8 @@ if __name__ == "__main__":
                 lo, hi = g
                 if hi > lo + 1:
                     values[lo:hi] = values[lo:hi].mean()
+                    vectors[:,lo:hi] = la.orth(vectors[:,lo:hi])
+
             mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
 
             irreps = []
@@ -345,8 +347,9 @@ if __name__ == "__main__":
                         tmp_itp = np.where(k_unique == tmp_value)[0]
 
                         if hi == lo + 1:
-                            means1 = divide_irreps2(vectors[:, lo:hi].T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
+                            means1 = divide_irreps2(vectors[:, lo:hi].T[0], adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
                             tmp_irreps = means1 > args.means_tol
+                            
                             if tmp_irreps.sum()==1:
                                 irreps.extend(np.where(tmp_irreps)[0])
                             else:
@@ -367,48 +370,52 @@ if __name__ == "__main__":
                                             tmp_itp1 = ir * dim
                                             tmp_itp2 = ir * dim + dim
 
-                                            tmp1 = ((vectors[:, lo:hi].T @ adapted[tmp_itp.item()]).conj())[:, tmp_itp1:tmp_itp2]
-                                            tmp_vec = tmp1 @ adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2].T
-                                            tmp2 = np.linalg.norm(tmp_vec.sum(axis=0))
-                                            tmp3 = (np.abs(tmp_vec.sum(axis=0)) ** 2).sum()
+                                            tmp1 = ((vectors[:, lo:hi].sum(axis=1) @ adapted[tmp_itp.item()]))
+                                            tmp2 = tmp1[tmp_itp1:tmp_itp2]
+                                            # tmp3 = (tmp2[np.newaxis,:] * la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]).T)
+                                            tmp3 = tmp2[np.newaxis,:] * adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]
+                                            tmp_vec = la.orth(tmp3.sum(axis=1)[:,np.newaxis])
+                                            tmp_means = divide_irreps2(tmp_vec.T[0], adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
 
-                                            set_trace()
-                                            # new_vec.append(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
-                                            new_vec.append(tmp_vec[:, np.newaxis])
+                                            new_vec.append(tmp_vec)
                                         elif reps >=2:
                                             tmp_itp1 = ir * dim
                                             tmp_itp2 = ir * dim + dim
+                                            
+                                            tmp1 = (vectors[:, lo:hi].sum(axis=1) @ adapted[tmp_itp.item()])
+                                            tmp2 = tmp1[tmp_itp1:tmp_itp2]
+                                            # tmp3 = (tmp2[np.newaxis,:] * la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]).T)
+                                            tmp3 = tmp2[np.newaxis,:] * adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]
+                                            # tmp_vec = tmp3.sum(axis=1)[:,np.newaxis]
+                                            tmp_vec = la.orth(tmp3[:,:reps])
 
-                                            tmp_vec = ((vectors[:, lo:hi].T @ adapted[tmp_itp.item()])[:, tmp_itp1:tmp_itp2].conj()).sum(axis=0) @ adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2].T
+                                            tmp_means = divide_irreps2(tmp_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
 
                                             new_vec.append(tmp_vec)
-                                            # new_vec.append(la.orth(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]))
                                     new_vec = np.concatenate(new_vec, axis=1)
-                                    # vectors[:, lo:hi] = la.orth(new_vec)
                                     vectors[:, lo:hi] = new_vec
                                     means2 = divide_irreps2(new_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-
+                                    # set_trace()
                                     tmp_irreps = means2 > args.means_tol
                                     if (tmp_irreps.sum(axis=1)==1).all():
                                         irreps.extend(np.where(tmp_irreps)[1])
                                     else:
                                         set_trace()
-                                        logging.ERROR("")
-
+                                        logging.ERROR("Each vector can only corrrespond to one irreps")
                                 else:
                                     set_trace()
                                     logging.ERROR("It's not close to an integer")
 
                             else:
                                 set_trace()
-                                logging.ERROR("No correspond k within mask")
+                                logging.ERROR("No corresponding k within mask")
             return values, vectors, mask, irreps
 
 
         # # Solve the corresponding eigenvalue equations for the leads.
         # # Look for degenerate modes and orthonormalize them.
 
-        ALadvm, ULadvm, mask_Ladvm, _ = orthogonalize(*la.eig(inv_FLadvm), nrot, order, family, aL, num_atoms, matrices)
+        ALadvm, ULadvm, mask_Ladvm, irreps = orthogonalize(*la.eig(inv_FLadvm), nrot, order, family, aL, num_atoms, matrices)
         ALretp, ULretp, mask_Lretp, _ = orthogonalize(*la.eig(FLretp), nrot, order, family, aL, num_atoms, matrices)
         ARretp, URretp, mask_Rretp, _ = orthogonalize(*la.eig(FRretp), nrot, order, family, aL, num_atoms, matrices)
         ALadvp, ULadvp, mask_Ladvp, _ = orthogonalize(*la.eig(FLadvp), nrot, order, family, aL, num_atoms, matrices)
