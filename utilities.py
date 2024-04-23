@@ -39,77 +39,58 @@ def unit_basis_complex_vectors(complex_vectors):
 #     return normalized_complex_vectors
 
 
-def get_adapted_matrix(qpoints, nrot, order, family, a, num_atom, matrices):
-    adapteds, dimensions = [], []
-    for qp in qpoints:
-        characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
-        characters = np.array(characters)
-        characters = characters[::2] + characters[1::2]   # depend on the dimension of the character
+def get_adapted_matrix(qp, nrot, order, family, a, num_atom, matrices):
+    characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
+    characters = np.array(characters)
+    characters = characters[::2] + characters[1::2]   # depend on the dimension of the character
 
-        ndof = 3 * num_atom
-        remaining_dof = copy.deepcopy(ndof)
-        adapted = []
-        dimension = []
-        for ii, chara in enumerate(characters):  # loop quantum number
-            projector = np.zeros((ndof, ndof), dtype=np.complex128)
-            # prefactor = chara[0].real / len(chara)
-            for kk in range(len(chara)):  # loop ops
-                # projector += prefactor * chara[kk] * matrices[kk]
-                projector += chara[kk] * matrices[kk]
+    ndof = 3 * num_atom
+    remaining_dof = copy.deepcopy(ndof)
+    adapted = []
+    dimension = []
+    for ii, chara in enumerate(characters):  # loop quantum number
+        projector = np.zeros((ndof, ndof), dtype=np.complex128)
+        # prefactor = chara[0].real / len(chara)
+        for kk in range(len(chara)):  # loop ops
+            # projector += prefactor * chara[kk] * matrices[kk]
+            projector += chara[kk] * matrices[kk]
 
-            basis = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
-            adapted.append(basis)
+        basis = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+        adapted.append(basis)
 
-            remaining_dof -= basis.shape[1]
-            dimension.append(basis.shape[1])
-        adapted = np.concatenate(adapted, axis=1)
-        adapteds.append(adapted)
-        dimensions.append(dimension)
+        remaining_dof -= basis.shape[1]
+        dimension.append(basis.shape[1])
+    adapted = np.concatenate(adapted, axis=1)
 
-        if adapted.shape[0] != adapted.shape[1]:
-            print(ii, adapted.shape)
-            print(dimension)
-            set_trace()
-            logging.ERROR("the shape of adapted not equal")
-    return adapteds, dimensions
+    if adapted.shape[0] != adapted.shape[1]:
+        print(ii, adapted.shape)
+        print(dimension)
+        set_trace()
+        logging.ERROR("the shape of adapted not equal")
+    return adapted, dimension
 
 
-def devide_irreps(vec, adapted, dimensions):
-    tmp1 = vec @ adapted
-    start = 0
-    means = []
-    for im, dim in enumerate(dimensions):
-        end = start + dim
-        if vec.ndim == 1:
-            means.append(np.abs(tmp1[start:end]).sum())
+def summary_over_irreps(vecs, adapted, dimensions):
+    dot_products = adapted.T.conj() @ vecs
+    moduli = (dot_products.conj() * dot_products).real
+    splits = np.cumsum(dimensions)[:-1]
+    moduli = np.split(moduli, splits)
+    return np.asarray([m.sum(axis=0) for m in moduli]).T
 
-        else:
-            means.append(np.abs(tmp1[:, start:end]).sum(axis=1))
-        start = copy.copy(end)
-    means = np.array(means)
-    if means.ndim > 1:
-        means = means.T
-    return np.array(means)
 
-def divide_irreps2(vec, adapted, dimensions):
-    tmp1 = vec @ adapted.conj()
-    start = 0
-    means, vectors = [], []
-    for im, dim in enumerate(dimensions):
-        end = start + dim
-        if vec.ndim == 1:
-            means.append((np.abs(tmp1[start:end]) ** 2).sum())
-            # vectors.append((tmp1 * adapted)[:, start:end].sum(axis=1))
-        else:
-            means.append((np.abs(tmp1[:, start:end]) ** 2).sum(axis=1))
-            # for tmp2 in tmp1:
-            #     vectors.append((tmp2 * adapted)[:, start:end].sum(axis=1))
-            # set_trace()
-        start = copy.copy(end)
-    means = np.array(means)
-    if means.ndim > 1:
-        means = means.T
-    return np.array(means)
+def project_over_irreps(vecs, adapted, dimensions):
+    coefficients = adapted.T.conj() @ vecs
+    # Axes in the detailed projections:
+    # 0: Element in the adapted basis
+    # 1: Eigenvector number
+    # 2: Cartesian coordinate
+    projections = coefficients[:, :, np.newaxis] * adapted.T[:, np.newaxis, :]
+    # Now sum over the basis vectors corresponding to each irrep.
+    splits = np.cumsum(dimensions)[:-1]
+    projections = np.split(projections, splits, axis=0)
+    projections = np.asarray([p.sum(axis=0) for p in projections])
+    if vecs.shape[1] > 1:
+        pass
 
 
 def refine_qpoints(values, tol=1e-2):
