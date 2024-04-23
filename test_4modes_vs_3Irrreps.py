@@ -49,7 +49,10 @@ from phonopy.units import VaspToTHz
 from pymatgen.core.operations import SymmOp
 import logging
 from ase import Atoms
-from utilities import counting_y_from_xy, get_adapted_matrix, devide_irreps, divide_irreps2, combination_paras, refine_qpoints
+from utilities import counting_y_from_xy, get_adapted_matrix, devide_irreps, divide_irreps2, combination_paras, refine_qpoints, check_same_space
+
+import cvxpy as cp
+
 
 matplotlib.rcParams["font.size"] = 16.0
 NPOINTS = 50
@@ -361,9 +364,7 @@ if __name__ == "__main__":
                             if tmp_itp.size == 1:
                                 means1 = divide_irreps2(vectors[:, lo:hi].T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
                                 dim = dimensions[tmp_itp.item()][0]
-
                                 Irreps_num = np.round(means1.sum(axis=0)).astype(np.int32)
-
 
                                 if np.abs(Irreps_num - means1.sum(axis=0)).mean() < args.means_tol :
                                     new_vec = []
@@ -373,10 +374,13 @@ if __name__ == "__main__":
                                             tmp_itp2 = ir * dim + dim
 
                                             # tmp1 = ((vectors[:, lo:hi].sum(axis=1) @ adapted[tmp_itp.item()]))
-                                            tmp1 = ((vectors[:, lo:hi].T @ adapted[tmp_itp.item()]))
+                                            tmp1 = ((vectors[:, lo:hi].conj().T @ adapted[tmp_itp.item()]))
                                             tmp2 = tmp1[:, tmp_itp1:tmp_itp2].sum(axis=0)
-                                            tmp3 = tmp2[np.newaxis,:] * adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]
-                                            tmp_vec = la.orth(tmp3.sum(axis=1)[:,np.newaxis])
+
+                                            tmp3 = tmp2[np.newaxis,:] @ la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
+
+                                            tmp_vec = (tmp3 / la.norm(tmp3)).T
+                                            # tmp_vec = la.orth(tmp3.sum(axis=1)[:,np.newaxis])
                                             # tmp_vec = tmp3.sum(axis=1)[:,np.newaxis]
                                             tmp_means = divide_irreps2(tmp_vec.T[0], adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
 
@@ -385,21 +389,30 @@ if __name__ == "__main__":
                                             tmp_itp1 = ir * dim
                                             tmp_itp2 = ir * dim + dim
 
-                                            # set_trace()
-                                            tmp1 = (vectors[:, lo:hi].T @ adapted[tmp_itp.item()])
+                                            tmp1 = (vectors[:, lo:hi].conj().T @ adapted[tmp_itp.item()])
                                             tmp2 = tmp1[:,tmp_itp1:tmp_itp2].sum(axis=0)
                                             # tmp3 = (tmp2[np.newaxis,:] * la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]).T)
-                                            tmp3 = tmp2[np.newaxis,:] * adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]
-                                            # tmp_vec = tmp3.sum(axis=1)[:,np.newaxis]
-                                            tmp_vec = la.orth(tmp3[:,:reps])
+                                            tmp3 = tmp2[np.newaxis,:] @ la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
+                                            tmp_vec = (tmp3 / la.norm(tmp3)).T
+
+                                            # tmp_vec = la.orth(tmp3[:,:reps])
                                             tmp_means = divide_irreps2(tmp_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
 
                                             new_vec.append(tmp_vec)
                                     new_vec = np.concatenate(new_vec, axis=1)
 
-                                    vectors[:, lo:hi] = new_vec
-                                    means2 = divide_irreps2(new_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-                                    # set_trace()
+                                    new_vec1 = np.linalg.qr(new_vec)[0]    # won't change the direction/ space
+                                    # new_vec2 = la.orth(new_vec)
+
+                                    vectors[:, lo:hi] = new_vec1
+                                    # means2 = divide_irreps2(new_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
+                                    means2 = divide_irreps2(new_vec1.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
+                                    # means2 = divide_irreps2(new_vec2.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
+                                    set_trace()
+                                    if not check_same_space(new_vec1, vectors[:, lo:hi]):
+                                        set_trace()
+                                        logging.ERROR("new eigenvectors and original engenvectors are not in the same space")
+
                                     tmp_irreps = means2 > args.means_tol
                                     if (tmp_irreps.sum(axis=1)==1).all():
                                         irreps.extend(np.where(tmp_irreps)[1])

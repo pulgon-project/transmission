@@ -92,7 +92,8 @@ def devide_irreps(vec, adapted, dimensions):
     return np.array(means)
 
 def divide_irreps2(vec, adapted, dimensions):
-    tmp1 = vec @ adapted.conj()
+    # tmp1 = vec @ adapted.conj()
+    tmp1 = vec @ adapted
     start = 0
     means, vectors = [], []
     for im, dim in enumerate(dimensions):
@@ -190,4 +191,20 @@ def combination_paras(vectors, adapted, means, dimensions, tol=1e-3):
         #     set_trace()
         #     logging.ERROR("the shape of irreps incorect")
     return irreps, paras, means
+
+
+
+
+
+def check_same_space(array1, array2):
+    rank_array1 = np.linalg.matrix_rank(array1)
+    rank_array2 = np.linalg.matrix_rank(array2)
+
+    if rank_array1 == rank_array2:   # if the rank are the same, then check the rank of combine matrix
+        space1 = np.linalg.matrix_rank(np.hstack([array1, array2]))
+        space2 = np.linalg.matrix_rank(np.hstack([array2, array1]))
+        if space1 == space2 == rank_array1:
+            return True
+    return False
+
 
