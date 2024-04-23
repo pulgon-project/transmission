@@ -203,6 +203,7 @@ def check_same_space(array1, array2):
     if rank_array1 == rank_array2:   # if the rank are the same, then check the rank of combine matrix
         space1 = np.linalg.matrix_rank(np.hstack([array1, array2]))
         space2 = np.linalg.matrix_rank(np.hstack([array2, array1]))
+
         if space1 == space2 == rank_array1:
             return True
     return False

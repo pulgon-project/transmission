@@ -374,10 +374,14 @@ if __name__ == "__main__":
                                             tmp_itp2 = ir * dim + dim
 
                                             # tmp1 = ((vectors[:, lo:hi].sum(axis=1) @ adapted[tmp_itp.item()]))
-                                            tmp1 = ((vectors[:, lo:hi].conj().T @ adapted[tmp_itp.item()]))
+                                            tmp1 = ((vectors[:, lo:hi].T @ adapted[tmp_itp.item()]))
                                             tmp2 = tmp1[:, tmp_itp1:tmp_itp2].sum(axis=0)
-
                                             tmp3 = tmp2[np.newaxis,:] @ la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
+
+                                            coefficients = np.linalg.lstsq(adapted[tmp_itp.item()][:,:18], vectors[:,lo:hi])[0]
+                                            a1 = np.dot(adapted[tmp_itp.item()][:,:18], coefficients)
+                                            tmp4 = np.linalg.matrix_rank(np.hstack((a1, vectors[:,lo:hi])))
+                                            set_trace()
 
                                             tmp_vec = (tmp3 / la.norm(tmp3)).T
                                             # tmp_vec = la.orth(tmp3.sum(axis=1)[:,np.newaxis])
@@ -404,11 +408,12 @@ if __name__ == "__main__":
                                     new_vec1 = np.linalg.qr(new_vec)[0]    # won't change the direction/ space
                                     # new_vec2 = la.orth(new_vec)
 
-                                    vectors[:, lo:hi] = new_vec1
+                                    # vectors[:, lo:hi] = new_vec1
                                     # means2 = divide_irreps2(new_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
                                     means2 = divide_irreps2(new_vec1.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
                                     # means2 = divide_irreps2(new_vec2.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
                                     set_trace()
+
                                     if not check_same_space(new_vec1, vectors[:, lo:hi]):
                                         set_trace()
                                         logging.ERROR("new eigenvectors and original engenvectors are not in the same space")
