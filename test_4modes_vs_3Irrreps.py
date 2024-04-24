@@ -365,6 +365,7 @@ if __name__ == "__main__":
                 lo, hi = g
                 group_masks.append(mask & (indices >= lo) & (indices < hi))
 
+            irreps = []
             for i_m, m in enumerate(group_masks):
                 degeneracy = m.sum()
                 if degeneracy == 0:
@@ -379,139 +380,9 @@ if __name__ == "__main__":
                 for i_ir, v in enumerate(adapted_vecs):
                     if v.shape[1] > 0:
                         print(f"\t- {v.shape[1]} modes in irrep #{i_ir+1}")
+                        irreps.extend([i_ir] * v.shape[1])
+                vectors[:, m] = np.concatenate(adapted_vecs, axis=1)
 
-            sys.exit(1)
-
-            irreps = []
-            if mask.sum() != 0:  # not all False
-                idx_mask_end = np.where(mask)[0][-1]
-
-                k_w = np.abs(np.angle(values[mask]) / aL)
-                k_unique = np.unique(k_w)
-
-                for g in groups:
-                    lo, hi = g
-
-                    if hi <= idx_mask_end + 1:
-                        tmp_value = np.abs(np.angle(values[lo]) / aL)
-                        tmp_itp = np.where(k_unique == tmp_value)[0]
-
-                        if hi == lo + 1:
-                            means1 = divide_irreps2(
-                                vectors[:, lo:hi].T[0],
-                                adapted[tmp_itp.item()],
-                                dimensions[tmp_itp.item()],
-                            )
-                            tmp_irreps = means1 > args.means_tol
-
-                            if tmp_irreps.sum() == 1:
-                                irreps.extend(np.where(tmp_irreps)[0])
-                            else:
-                                set_trace()
-                                logging.ERROR("irreps more than one")
-                        elif hi > lo + 1:
-                            # if tmp_itp.size == 0:
-                            #     vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
-                            if tmp_itp.size == 1:
-                                means1 = divide_irreps2(
-                                    vectors[:, lo:hi].T,
-                                    adapted[tmp_itp.item()],
-                                    dimensions[tmp_itp.item()],
-                                )
-                                dim = dimensions[tmp_itp.item()][0]
-
-                                Irreps_num = np.round(means1.sum(axis=0)).astype(
-                                    np.int32
-                                )
-
-                                if (
-                                    np.abs(Irreps_num - means1.sum(axis=0)).mean()
-                                    < args.means_tol
-                                ):
-                                    new_vec = []
-                                    for ir, reps in enumerate(Irreps_num):
-                                        if (
-                                            reps == 1
-                                        ):  # only one vector is needed in this irreps subspace
-                                            tmp_itp1 = ir * dim
-                                            tmp_itp2 = ir * dim + dim
-
-                                            # tmp1 = ((vectors[:, lo:hi].sum(axis=1) @ adapted[tmp_itp.item()]))
-                                            tmp1 = (
-                                                vectors[:, lo:hi].T
-                                                @ adapted[tmp_itp.item()]
-                                            )
-                                            tmp2 = tmp1[:, tmp_itp1:tmp_itp2].sum(
-                                                axis=0
-                                            )
-                                            tmp3 = (
-                                                tmp2[np.newaxis, :]
-                                                * adapted[tmp_itp.item()][
-                                                    :, tmp_itp1:tmp_itp2
-                                                ]
-                                            )
-                                            tmp_vec = la.orth(
-                                                tmp3.sum(axis=1)[:, np.newaxis]
-                                            )
-                                            # tmp_vec = tmp3.sum(axis=1)[:,np.newaxis]
-                                            tmp_means = divide_irreps2(
-                                                tmp_vec.T[0],
-                                                adapted[tmp_itp.item()],
-                                                dimensions[tmp_itp.item()],
-                                            )
-
-                                            new_vec.append(tmp_vec)
-                                        elif reps >= 2:
-                                            tmp_itp1 = ir * dim
-                                            tmp_itp2 = ir * dim + dim
-
-                                            # set_trace()
-                                            tmp1 = (
-                                                vectors[:, lo:hi].T
-                                                @ adapted[tmp_itp.item()]
-                                            )
-                                            tmp2 = tmp1[:, tmp_itp1:tmp_itp2].sum(
-                                                axis=0
-                                            )
-                                            # tmp3 = (tmp2[np.newaxis,:] * la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]).T)
-                                            tmp3 = (
-                                                tmp2[np.newaxis, :]
-                                                * adapted[tmp_itp.item()][
-                                                    :, tmp_itp1:tmp_itp2
-                                                ]
-                                            )
-                                            # tmp_vec = tmp3.sum(axis=1)[:,np.newaxis]
-                                            tmp_vec = la.orth(tmp3[:, :reps])
-                                            tmp_means = divide_irreps2(
-                                                tmp_vec.T,
-                                                adapted[tmp_itp.item()],
-                                                dimensions[tmp_itp.item()],
-                                            )
-
-                                            new_vec.append(tmp_vec)
-                                    new_vec = np.concatenate(new_vec, axis=1)
-
-                                    vectors[:, lo:hi] = new_vec
-                                    means2 = divide_irreps2(
-                                        new_vec.T,
-                                        adapted[tmp_itp.item()],
-                                        dimensions[tmp_itp.item()],
-                                    )
-                                    # set_trace()
-                                    tmp_irreps = means2 > args.means_tol
-                                    if (tmp_irreps.sum(axis=1) == 1).all():
-                                        irreps.extend(np.where(tmp_irreps)[1])
-                                    else:
-                                        set_trace()
-                                        logging.ERROR(
-                                            "Each vector can only corrrespond to one irreps"
-                                        )
-                                else:
-                                    set_trace()
-                                    logging.ERROR("It's not close to an integer")
-                            else:
-                                set_trace()
-                                logging.ERROR("No corresponding k within mask")
             return values, vectors, mask, irreps
 
         # # Solve the corresponding eigenvalue equations for the leads.
@@ -653,62 +524,9 @@ if __name__ == "__main__":
         tRL = tRL[mask_Rretp, :][:, mask_Ladvm]
         trans_modes = np.diag(tRL.conj().T @ tRL).real
 
-        set_trace()
-
         # tRL2 = tRL[mask_Rretp, :][:, mask_Ladvm][:2,:2]
         # trans_modes2 = np.diag(tRL2.conj().T @ tRL2)
         trans_check[iomega] = trans_modes.sum().real
 
-        eigvec_modes = ULadvm[:, mask_Ladvm]
-        if eigvec_modes.ndim > 1:
-            eigvec_modes = eigvec_modes.T
-        print("---------- -----------")
-        print("omega=", omega)
-        k_w = np.abs(np.angle(ALadvm[mask_Ladvm]) / aL)
-        # k_w_unique = np.unique(k_w)
-
-        print("k_w: ", k_w)
-        print("k=", test_k)
-
-        tmp_transmission_prob, tmp_irreps, tmp_idx = [], [], []
-
-        itp1 = k_w == test_k
-        itp2 = np.where(k_w == test_k)[0]
-        num_mode = itp1.sum()
-
-        tmp_idx.extend(itp2)
-        vectors = eigvec_modes[itp2]
-        means = devide_irreps(vectors, adapted, dimensions) > args.means_tol
-
-        set_trace()
-
-        means_unique = np.unique(means, axis=0)
-        if (
-            means_unique.shape[0] == 1
-        ):  # degenerated q correspond to the same Irreps basis
-            irps, paras, _ = combination_paras(
-                vectors, adapted, means, dimensions, tol=args.means_tol
-            )
-            tmp_irreps.extend(irps)
-            probabilities = trans_modes[itp2].real
-            if len(irps) != len(probabilities):
-                if (len(probabilities) - len(irps)) == 1:
-                    paras_abs = np.abs(paras) ** 2
-                    paras_last = 1 - paras_abs.sum(axis=0)
-                    paras_abs = np.vstack((paras_abs, paras_last))
-
-                    irps_last = np.where(
-                        devide_irreps(paras_last @ vectors, adapted, dimensions)
-                        > args.means_tol
-                    )[0]
-                    tmp_irreps.extend(irps_last)
-                    probabilities_new = paras_abs @ probabilities
-                else:
-                    set_trace()
-                    logging.Error("the num of irps and probability not equal")
-            tmp_transmission_prob.extend(probabilities_new)
-
-    print("The Irreps of new modes is: ", tmp_irreps)
-    print("The transmission probibalities of new modes is: ", tmp_transmission_prob)
-    print("The sum of transmission in original modes:", probabilities.sum())
-    print("The sum of transmission in new modes:", probabilities_new.sum())
+        probabilities = np.abs(tRL) ** 2
+        print(np.round(probabilities, decimals=2))
