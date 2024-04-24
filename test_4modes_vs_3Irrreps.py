@@ -52,7 +52,6 @@ from ase import Atoms
 from utilities import (
     counting_y_from_xy,
     get_adapted_matrix,
-    summary_over_irreps,
     divide_over_irreps,
     combination_paras,
     refine_qpoints,
@@ -366,7 +365,7 @@ if __name__ == "__main__":
                 lo, hi = g
                 group_masks.append(mask & (indices >= lo) & (indices < hi))
 
-            for m in group_masks:
+            for i_m, m in enumerate(group_masks):
                 degeneracy = m.sum()
                 if degeneracy == 0:
                     continue
@@ -375,10 +374,12 @@ if __name__ == "__main__":
                 basis, dimensions = get_adapted_matrix(
                     k_w, nrot, order_character, family, aL, num_atoms, matrices
                 )
-                summary = summary_over_irreps(group_vectors, basis, dimensions)
-                print(np.round(summary, decimals=2))
-                divide_over_irreps(group_vectors, basis, dimensions)
-            
+                adapted_vecs = divide_over_irreps(group_vectors, basis, dimensions)
+                print(f"Group {i_m}: {group_vectors.shape[1]} modes")
+                for i_ir, v in enumerate(adapted_vecs):
+                    if v.shape[1] > 0:
+                        print(f"\t- {v.shape[1]} modes in irrep #{i_ir+1}")
+
             sys.exit(1)
 
             irreps = []

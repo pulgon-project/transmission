@@ -5,10 +5,11 @@ from pulgon_tools_wip.utils import fast_orth, get_character
 import copy
 import scipy.linalg as la
 
-def counting_y_from_xy(y,xy, direction=1, tolerance=1e-5):
-    tmp1 = xy-y
-    if direction>0:
-        tmp2 = np.logical_and(tmp1[:, 1:] >= -tolerance, tmp1[:, :-1]<=tolerance)
+
+def counting_y_from_xy(y, xy, direction=1, tolerance=1e-5):
+    tmp1 = xy - y
+    if direction > 0:
+        tmp2 = np.logical_and(tmp1[:, 1:] >= -tolerance, tmp1[:, :-1] <= tolerance)
     else:
         tmp2 = np.logical_and(tmp1[:, 1:] < tolerance, tmp1[:, :-1] >= -tolerance)
     counts = tmp2.sum()
@@ -22,7 +23,7 @@ def unit_basis_complex_vectors(complex_vectors):
 
         # set_trace()
         return unit_complex_vectors
-    elif complex_vectors.ndim ==2:
+    elif complex_vectors.ndim == 2:
         unit_complex_vectors = []
         for vec in complex_vectors:
             moduli = np.abs(vec)
@@ -40,9 +41,13 @@ def unit_basis_complex_vectors(complex_vectors):
 
 
 def get_adapted_matrix(qp, nrot, order, family, a, num_atom, matrices):
-    characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
+    characters, paras_values, paras_symbols = get_character(
+        [qp], nrot, order, family, a
+    )
     characters = np.array(characters)
-    characters = characters[::2] + characters[1::2]   # depend on the dimension of the character
+    characters = (
+        characters[::2] + characters[1::2]
+    )  # depend on the dimension of the character
 
     ndof = 3 * num_atom
     remaining_dof = copy.deepcopy(ndof)
@@ -70,28 +75,26 @@ def get_adapted_matrix(qp, nrot, order, family, a, num_atom, matrices):
     return adapted, dimension
 
 
-def summary_over_irreps(vecs, adapted, dimensions):
-    dot_products = adapted.T.conj() @ vecs
-    moduli = (dot_products.conj() * dot_products).real
-    splits = np.cumsum(dimensions)[:-1]
-    moduli = np.split(moduli, splits)
-    return np.asarray([m.sum(axis=0) for m in moduli]).T
-
-
 def divide_over_irreps(vecs, basis, dimensions):
+    n_vecs = vecs.shape[1]
     splits = np.cumsum(dimensions)[:-1]
     irrep_bases = np.split(basis, splits, axis=1)
-    print("-" * 80)
-    total = 0
-    for i_b, b in enumerate(irrep_bases):
-        coefficients = np.concatenate([b, -vecs], axis=1)
+    adapted_vecs = []
+    for b in irrep_bases:
+        combined_matrix = np.concatenate([vecs, -b], axis=1)
         # TODO: Handle the tolerance more sensibly and systematically.
-        kernel = la.null_space(coefficients, rcond=1e-1)
-        print(i_b, kernel.shape)
-        total += kernel.shape[1]
-    print("+" * 80)
-    print(f"Needed: {vecs.shape[1]}. Found: {total}")
-    print("-" * 80)
+        kernel = la.null_space(combined_matrix, rcond=1e-1)
+        n_solutions = kernel.shape[1]
+        coefficients = kernel[:n_vecs, :]
+        new_vecs = vecs @ coefficients
+        if n_solutions > 0:
+            new_vecs = la.orth(new_vecs)
+        adapted_vecs.append(new_vecs)
+    found = sum(v.shape[1] for v in adapted_vecs)
+    if found != n_vecs:
+        raise ValueError(f"{n_vecs} were needed, but {found} were found")
+    return adapted_vecs
+
 
 def refine_qpoints(values, tol=1e-2):
     modules = np.abs(values)
@@ -102,9 +105,7 @@ def refine_qpoints(values, tol=1e-2):
     groups = []
 
     while True:
-        if hi >= values.shape[0] or not np.isclose(
-                values[hi], values[hi - 1], tol
-        ):
+        if hi >= values.shape[0] or not np.isclose(values[hi], values[hi - 1], tol):
             groups.append((lo, hi))
             lo = hi
         if hi > len(values):
@@ -125,18 +126,18 @@ def combination_paras(vectors, adapted, means, dimensions, tol=1e-3):
     idx1 = means
     itp_basis = np.unique(np.where(idx1)[1])
     # if idx1[0].sum()==1:
-    if len(itp_basis)==1:
+    if len(itp_basis) == 1:
         irreps = np.where(idx1[0])[0].repeat(vectors.shape[0])
         itp1 = itp_basis * dim
         itp2 = itp1 + dim
         proj = vectors @ adapted
-        paras = la.pinv(proj[:, itp1.item(): itp2.item()])
-        paras = paras / np.linalg.norm(paras, axis=1)[:, np.newaxis]    # normalization
+        paras = la.pinv(proj[:, itp1.item() : itp2.item()])
+        paras = paras / np.linalg.norm(paras, axis=1)[:, np.newaxis]  # normalization
 
         res = paras @ vectors
         U_irreps = res[0]
         means = devide_irreps(U_irreps, adapted, dimensions)
-#        paras = paras[0]   # row vector
+        #        paras = paras[0]   # row vector
         paras = np.eye(vectors.shape[0])
 
     else:
@@ -151,9 +152,9 @@ def combination_paras(vectors, adapted, means, dimensions, tol=1e-3):
             else:
                 tmp_matrix = np.hstack((tmp_matrix, proj[:, tmp1:tmp2]))
         paras = la.pinv(tmp_matrix)
-        paras = paras / np.linalg.norm(paras, axis=1)[:,np.newaxis]   # normalization
+        paras = paras / np.linalg.norm(paras, axis=1)[:, np.newaxis]  # normalization
 
-        paras = paras[::dim]   # row vector
+        paras = paras[::dim]  # row vector
         res = paras @ vectors
 
         U_irreps = res
@@ -171,4 +172,3 @@ def combination_paras(vectors, adapted, means, dimensions, tol=1e-3):
         #     set_trace()
         #     logging.ERROR("the shape of irreps incorect")
     return irreps, paras, means
-
