@@ -49,7 +49,14 @@ from phonopy.units import VaspToTHz
 from pymatgen.core.operations import SymmOp
 import logging
 from ase import Atoms
-from utilities import counting_y_from_xy, get_adapted_matrix, devide_irreps, divide_irreps2, combination_paras, refine_qpoints
+from utilities import (
+    counting_y_from_xy,
+    get_adapted_matrix,
+    summary_over_irreps,
+    divide_over_irreps,
+    combination_paras,
+    refine_qpoints,
+)
 
 matplotlib.rcParams["font.size"] = 16.0
 NPOINTS = 50
@@ -71,7 +78,7 @@ if __name__ == "__main__":
         type=float,
         default=1e-3,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
-             " it a propagating mode",
+        " it a propagating mode",
     )
     parser.add_argument(
         "-t2",
@@ -79,7 +86,7 @@ if __name__ == "__main__":
         type=float,
         default=5e-3,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
-             " it a propagating mode",
+        " it a propagating mode",
     )
     parser.add_argument(
         "-t3",
@@ -87,7 +94,7 @@ if __name__ == "__main__":
         type=float,
         default=1e-2,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
-             " it a propagating mode",
+        " it a propagating mode",
     )
     parser.add_argument(
         "-d",
@@ -122,7 +129,11 @@ if __name__ == "__main__":
     phonon = phonopy.load(phonopy_yaml=path_phonopy_pure, is_compact_fc=True)
 
     poscar_phonopy = phonon.primitive
-    poscar_ase = Atoms(cell=poscar_phonopy.cell, positions=poscar_phonopy.positions, numbers=poscar_phonopy.numbers)
+    poscar_ase = Atoms(
+        cell=poscar_phonopy.cell,
+        positions=poscar_phonopy.positions,
+        numbers=poscar_phonopy.numbers,
+    )
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
     atom = cyclic._primitive
     atom_center = find_axis_center_of_nanotube(atom)
@@ -131,9 +142,7 @@ if __name__ == "__main__":
     k_end = np.pi
 
     path = [[[0, 0, k_start / 2 / np.pi], [0, 0, k_end / 2 / np.pi]]]
-    qpoints, connections = get_band_qpoints_and_path_connections(
-        path, npoints=NPOINTS
-    )
+    qpoints, connections = get_band_qpoints_and_path_connections(path, npoints=NPOINTS)
     qpoints = qpoints[0]
 
     qpoints_1dim = np.linspace(k_start, k_end, num=NPOINTS, endpoint=k_end)
@@ -148,10 +157,14 @@ if __name__ == "__main__":
     tran = SymmOp.from_rotation_and_translation(Cn(2 * nrot), [0, 0, 1 / 2])
     # pg1 = obj.get_generators()    # change the order to satisfy the character table
     # sym.append(pg1[1])
-    S12 = np.array([[0.8660254, -0.5, 0., 0.],
-                    [0.5, 0.8660254, 0., 0.],
-                    [0., 0., -1., 0.],
-                    [0., 0., 0., 1.]])
+    S12 = np.array(
+        [
+            [0.8660254, -0.5, 0.0, 0.0],
+            [0.5, 0.8660254, 0.0, 0.0],
+            [0.0, 0.0, -1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
     sym.append(S12)
 
     ops, order = brute_force_generate_group_subsquent(sym)
@@ -183,16 +196,30 @@ if __name__ == "__main__":
     cells = max(defect_indices) + 1
     idx_scatter = np.where(defect_indices == int((cells - 1) / 2))[0]
 
-    mass_C = np.diag(np.power(ase.data.atomic_masses[phonon_defect.primitive.numbers[idx_scatter]], -1 / 2))
+    mass_C = np.diag(
+        np.power(
+            ase.data.atomic_masses[phonon_defect.primitive.numbers[idx_scatter]], -1 / 2
+        )
+    )
     mass_L = np.diag(np.power(ase.data.atomic_masses[poscar.numbers], -1 / 2))
     mass_R = mass_L.copy()
-    unit = 1e-24 * ase.units.m ** 2 * ase.units.kg / ase.units.J
+    unit = 1e-24 * ase.units.m**2 * ase.units.kg / ase.units.J
 
-    HL = unit * np.einsum('ijlm,jk->iklm', np.einsum('ij,jkln->ikln', mass_L, HL), mass_L)
-    TL = unit * np.einsum('ijlm,jk->iklm', np.einsum('ij,jkln->ikln', mass_L, TL), mass_L)
-    KC = unit * np.einsum('ijlm,jk->iklm', np.einsum('ij,jkln->ikln', mass_C, KC), mass_C)
-    VLC = unit * np.einsum('ijlm,jk->iklm', np.einsum('ij,jkln->ikln', mass_L, VLC), mass_C)
-    VCR = unit * np.einsum('ijlm,jk->iklm', np.einsum('ij,jkln->ikln', mass_C, VCR), mass_R)
+    HL = unit * np.einsum(
+        "ijlm,jk->iklm", np.einsum("ij,jkln->ikln", mass_L, HL), mass_L
+    )
+    TL = unit * np.einsum(
+        "ijlm,jk->iklm", np.einsum("ij,jkln->ikln", mass_L, TL), mass_L
+    )
+    KC = unit * np.einsum(
+        "ijlm,jk->iklm", np.einsum("ij,jkln->ikln", mass_C, KC), mass_C
+    )
+    VLC = unit * np.einsum(
+        "ijlm,jk->iklm", np.einsum("ij,jkln->ikln", mass_L, VLC), mass_C
+    )
+    VCR = unit * np.einsum(
+        "ijlm,jk->iklm", np.einsum("ij,jkln->ikln", mass_C, VCR), mass_R
+    )
 
     HL = HL.transpose((0, 2, 1, 3)).reshape((HL.shape[0] * 3, -1))
     TL = TL.transpose((0, 2, 1, 3)).reshape((TL.shape[0] * 3, -1))
@@ -229,8 +256,7 @@ if __name__ == "__main__":
     matrices_prob, Irreps = [], []
     NLp_irreps = np.zeros((6, NPOINTS))  # the number of im
 
-
-    omega=56.77013783915039
+    omega = 56.77013783915039
     inc_omega = [omega]
     for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
 
@@ -286,26 +312,26 @@ if __name__ == "__main__":
         ])
 
         # yapf: enable
-        Gret = la.pinv(
-            en * np.eye(H_pr.shape[0], dtype=np.complex128) - H_pr
-        )
+        Gret = la.pinv(en * np.eye(H_pr.shape[0], dtype=np.complex128) - H_pr)
         # Compute the total transmission.
         GammaL = (
-                1.0j * TL.conj().T @ (la.solve(inv_gLretm, TL) - la.solve(inv_gLadvm, TL))
+            1.0j * TL.conj().T @ (la.solve(inv_gLretm, TL) - la.solve(inv_gLadvm, TL))
         )
         GammaR = (
-                1.0j
-                * TR
-                @ (la.solve(inv_gRretp, TR.conj().T) - la.solve(inv_gRadvp, TR.conj().T))
+            1.0j
+            * TR
+            @ (la.solve(inv_gRretp, TR.conj().T) - la.solve(inv_gRadvp, TR.conj().T))
         )
-        GLRret = Gret[: HL_pr.shape[0], -HR_pr.shape[1]:]
-        GRLret = Gret[-HR_pr.shape[0]:, : HL_pr.shape[1]]
+        GLRret = Gret[: HL_pr.shape[0], -HR_pr.shape[1] :]
+        GRLret = Gret[-HR_pr.shape[0] :, : HL_pr.shape[1]]
 
         trans[iomega] = np.trace(
             GRLret @ (GRLret @ GammaL.conj().T).conj().T @ GammaR
         ).real
 
-        def orthogonalize(values, vectors, nrot, order_character, family, aL, num_atoms, matrices):
+        def orthogonalize(
+            values, vectors, nrot, order_character, family, aL, num_atoms, matrices
+        ):
             modules = np.abs(values)
             phases = np.angle(values)
             order = np.argsort(-modules)
@@ -316,7 +342,10 @@ if __name__ == "__main__":
             groups = []
             while True:
                 if hi >= vectors.shape[1] or not np.isclose(
-                        np.angle(values[hi]), np.angle(values[hi - 1]), rtol=args.rtol, atol=args.atol,
+                    np.angle(values[hi]),
+                    np.angle(values[hi - 1]),
+                    rtol=args.rtol,
+                    atol=args.atol,
                 ):
                     groups.append((lo, hi))
                     lo = hi
@@ -327,17 +356,35 @@ if __name__ == "__main__":
                 lo, hi = g
                 if hi > lo + 1:
                     values[lo:hi] = values[lo:hi].mean()
-                    vectors[:,lo:hi] = la.orth(vectors[:,lo:hi])
+                    vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
 
             mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
 
+            indices = np.arange(len(mask))
+            group_masks = []
+            for g in groups:
+                lo, hi = g
+                group_masks.append(mask & (indices >= lo) & (indices < hi))
+
+            for m in group_masks:
+                degeneracy = m.sum()
+                if degeneracy == 0:
+                    continue
+                k_w = np.abs(np.angle(values[mask][0]) / aL)
+                group_vectors = vectors[:, m]
+                basis, dimensions = get_adapted_matrix(
+                    k_w, nrot, order_character, family, aL, num_atoms, matrices
+                )
+                summary = summary_over_irreps(group_vectors, basis, dimensions)
+                print(np.round(summary, decimals=2))
+            sys.exit(1)
+
             irreps = []
-            if mask.sum()!=0:     # not all False
+            if mask.sum() != 0:  # not all False
                 idx_mask_end = np.where(mask)[0][-1]
 
                 k_w = np.abs(np.angle(values[mask]) / aL)
                 k_unique = np.unique(k_w)
-                adapted, dimensions = get_adapted_matrix(k_unique, nrot, order_character, family, aL, num_atoms, matrices)
 
                 for g in groups:
                     lo, hi = g
@@ -347,65 +394,115 @@ if __name__ == "__main__":
                         tmp_itp = np.where(k_unique == tmp_value)[0]
 
                         if hi == lo + 1:
-                            means1 = divide_irreps2(vectors[:, lo:hi].T[0], adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
+                            means1 = divide_irreps2(
+                                vectors[:, lo:hi].T[0],
+                                adapted[tmp_itp.item()],
+                                dimensions[tmp_itp.item()],
+                            )
                             tmp_irreps = means1 > args.means_tol
-                            
-                            if tmp_irreps.sum()==1:
+
+                            if tmp_irreps.sum() == 1:
                                 irreps.extend(np.where(tmp_irreps)[0])
                             else:
                                 set_trace()
-                                logging.ERROR('irreps more than one')
+                                logging.ERROR("irreps more than one")
                         elif hi > lo + 1:
                             # if tmp_itp.size == 0:
                             #     vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
                             if tmp_itp.size == 1:
-                                means1 = divide_irreps2(vectors[:, lo:hi].T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
+                                means1 = divide_irreps2(
+                                    vectors[:, lo:hi].T,
+                                    adapted[tmp_itp.item()],
+                                    dimensions[tmp_itp.item()],
+                                )
                                 dim = dimensions[tmp_itp.item()][0]
 
-                                Irreps_num = np.round(means1.sum(axis=0)).astype(np.int32)
+                                Irreps_num = np.round(means1.sum(axis=0)).astype(
+                                    np.int32
+                                )
 
-
-                                if np.abs(Irreps_num - means1.sum(axis=0)).mean() < args.means_tol :
+                                if (
+                                    np.abs(Irreps_num - means1.sum(axis=0)).mean()
+                                    < args.means_tol
+                                ):
                                     new_vec = []
                                     for ir, reps in enumerate(Irreps_num):
-                                        if reps == 1:     # only one vector is needed in this irreps subspace
+                                        if (
+                                            reps == 1
+                                        ):  # only one vector is needed in this irreps subspace
                                             tmp_itp1 = ir * dim
                                             tmp_itp2 = ir * dim + dim
 
                                             # tmp1 = ((vectors[:, lo:hi].sum(axis=1) @ adapted[tmp_itp.item()]))
-                                            tmp1 = ((vectors[:, lo:hi].T @ adapted[tmp_itp.item()]))
-                                            tmp2 = tmp1[:, tmp_itp1:tmp_itp2].sum(axis=0)
-                                            tmp3 = tmp2[np.newaxis,:] * adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]
-                                            tmp_vec = la.orth(tmp3.sum(axis=1)[:,np.newaxis])
+                                            tmp1 = (
+                                                vectors[:, lo:hi].T
+                                                @ adapted[tmp_itp.item()]
+                                            )
+                                            tmp2 = tmp1[:, tmp_itp1:tmp_itp2].sum(
+                                                axis=0
+                                            )
+                                            tmp3 = (
+                                                tmp2[np.newaxis, :]
+                                                * adapted[tmp_itp.item()][
+                                                    :, tmp_itp1:tmp_itp2
+                                                ]
+                                            )
+                                            tmp_vec = la.orth(
+                                                tmp3.sum(axis=1)[:, np.newaxis]
+                                            )
                                             # tmp_vec = tmp3.sum(axis=1)[:,np.newaxis]
-                                            tmp_means = divide_irreps2(tmp_vec.T[0], adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
+                                            tmp_means = divide_irreps2(
+                                                tmp_vec.T[0],
+                                                adapted[tmp_itp.item()],
+                                                dimensions[tmp_itp.item()],
+                                            )
 
                                             new_vec.append(tmp_vec)
-                                        elif reps >=2:
+                                        elif reps >= 2:
                                             tmp_itp1 = ir * dim
                                             tmp_itp2 = ir * dim + dim
 
                                             # set_trace()
-                                            tmp1 = (vectors[:, lo:hi].T @ adapted[tmp_itp.item()])
-                                            tmp2 = tmp1[:,tmp_itp1:tmp_itp2].sum(axis=0)
+                                            tmp1 = (
+                                                vectors[:, lo:hi].T
+                                                @ adapted[tmp_itp.item()]
+                                            )
+                                            tmp2 = tmp1[:, tmp_itp1:tmp_itp2].sum(
+                                                axis=0
+                                            )
                                             # tmp3 = (tmp2[np.newaxis,:] * la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]).T)
-                                            tmp3 = tmp2[np.newaxis,:] * adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]
+                                            tmp3 = (
+                                                tmp2[np.newaxis, :]
+                                                * adapted[tmp_itp.item()][
+                                                    :, tmp_itp1:tmp_itp2
+                                                ]
+                                            )
                                             # tmp_vec = tmp3.sum(axis=1)[:,np.newaxis]
-                                            tmp_vec = la.orth(tmp3[:,:reps])
-                                            tmp_means = divide_irreps2(tmp_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
+                                            tmp_vec = la.orth(tmp3[:, :reps])
+                                            tmp_means = divide_irreps2(
+                                                tmp_vec.T,
+                                                adapted[tmp_itp.item()],
+                                                dimensions[tmp_itp.item()],
+                                            )
 
                                             new_vec.append(tmp_vec)
                                     new_vec = np.concatenate(new_vec, axis=1)
 
                                     vectors[:, lo:hi] = new_vec
-                                    means2 = divide_irreps2(new_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
+                                    means2 = divide_irreps2(
+                                        new_vec.T,
+                                        adapted[tmp_itp.item()],
+                                        dimensions[tmp_itp.item()],
+                                    )
                                     # set_trace()
                                     tmp_irreps = means2 > args.means_tol
-                                    if (tmp_irreps.sum(axis=1)==1).all():
+                                    if (tmp_irreps.sum(axis=1) == 1).all():
                                         irreps.extend(np.where(tmp_irreps)[1])
                                     else:
                                         set_trace()
-                                        logging.ERROR("Each vector can only corrrespond to one irreps")
+                                        logging.ERROR(
+                                            "Each vector can only corrrespond to one irreps"
+                                        )
                                 else:
                                     set_trace()
                                     logging.ERROR("It's not close to an integer")
@@ -414,19 +511,33 @@ if __name__ == "__main__":
                                 logging.ERROR("No corresponding k within mask")
             return values, vectors, mask, irreps
 
-
         # # Solve the corresponding eigenvalue equations for the leads.
         # # Look for degenerate modes and orthonormalize them.
 
-        ALadvm, ULadvm, mask_Ladvm, irreps = orthogonalize(*la.eig(inv_FLadvm), nrot, order, family, aL, num_atoms, matrices)
-        ALretp, ULretp, mask_Lretp, _ = orthogonalize(*la.eig(FLretp), nrot, order, family, aL, num_atoms, matrices)
-        ARretp, URretp, mask_Rretp, _ = orthogonalize(*la.eig(FRretp), nrot, order, family, aL, num_atoms, matrices)
-        ALadvp, ULadvp, mask_Ladvp, _ = orthogonalize(*la.eig(FLadvp), nrot, order, family, aL, num_atoms, matrices)
-        ARadvp, URadvp, mask_Radvp, _ = orthogonalize(*la.eig(FRadvp), nrot, order, family, aL, num_atoms, matrices)
-        ALretm, ULretm, mask_Lretm, _ = orthogonalize(*la.eig(inv_FLretm), nrot, order, family, aL, num_atoms, matrices)
-        ARretm, URretm, mask_Rretm, _ = orthogonalize(*la.eig(inv_FRretm), nrot, order, family, aL, num_atoms, matrices)
-        ARadvm, URadvm, mask_Radvm, _ = orthogonalize(*la.eig(inv_FRadvm), nrot, order, family, aL, num_atoms, matrices)
-
+        ALadvm, ULadvm, mask_Ladvm, irreps = orthogonalize(
+            *la.eig(inv_FLadvm), nrot, order, family, aL, num_atoms, matrices
+        )
+        ALretp, ULretp, mask_Lretp, _ = orthogonalize(
+            *la.eig(FLretp), nrot, order, family, aL, num_atoms, matrices
+        )
+        ARretp, URretp, mask_Rretp, _ = orthogonalize(
+            *la.eig(FRretp), nrot, order, family, aL, num_atoms, matrices
+        )
+        ALadvp, ULadvp, mask_Ladvp, _ = orthogonalize(
+            *la.eig(FLadvp), nrot, order, family, aL, num_atoms, matrices
+        )
+        ARadvp, URadvp, mask_Radvp, _ = orthogonalize(
+            *la.eig(FRadvp), nrot, order, family, aL, num_atoms, matrices
+        )
+        ALretm, ULretm, mask_Lretm, _ = orthogonalize(
+            *la.eig(inv_FLretm), nrot, order, family, aL, num_atoms, matrices
+        )
+        ARretm, URretm, mask_Rretm, _ = orthogonalize(
+            *la.eig(inv_FRretm), nrot, order, family, aL, num_atoms, matrices
+        )
+        ARadvm, URadvm, mask_Radvm, _ = orthogonalize(
+            *la.eig(inv_FRadvm), nrot, order, family, aL, num_atoms, matrices
+        )
 
         # Compute the group velocity matrices.
         # yapf: disable
@@ -463,7 +574,6 @@ if __name__ == "__main__":
                 la.solve(inv_gRretm, TR)
         ) @ URadvm / 2. / omega
 
-
         # yapf: enable
         # Refine these matrices using the precomputed propagation masks.
         def refine(V, mask):
@@ -489,7 +599,6 @@ if __name__ == "__main__":
             indices = np.logical_not(np.isclose(np.abs(diag), 0.0))
             nruter[indices] = 1.0 / diag[indices]
             return np.diag(nruter)
-
 
         VLretp_tilde = build_tilde(VLretp)
         VRretp_tilde = build_tilde(VRretp)
@@ -517,30 +626,29 @@ if __name__ == "__main__":
         VRadvp12 = np.sqrt(VRadvp)
 
         tRL = (
-                2.0j
-                * omega
-                * (
-                        VRretp12
-                        @ la.solve(URretp, GRLret)
-                        @ la.solve(ULadvm.conj().T, VLadvm12)
-                        / np.sqrt(aR * aL)
-                )
+            2.0j
+            * omega
+            * (
+                VRretp12
+                @ la.solve(URretp, GRLret)
+                @ la.solve(ULadvm.conj().T, VLadvm12)
+                / np.sqrt(aR * aL)
+            )
         )
         tLR = (
-                2.0j
-                * omega
-                * (
-                        VLretm12
-                        @ la.solve(ULretm, GLRret)
-                        @ la.solve(URadvp.conj().T, VRadvp12)
-                        / np.sqrt(aR * aL)
-                )
+            2.0j
+            * omega
+            * (
+                VLretm12
+                @ la.solve(ULretm, GLRret)
+                @ la.solve(URadvp.conj().T, VRadvp12)
+                / np.sqrt(aR * aL)
+            )
         )
 
         #  Discard evanescent modes.
         tRL = tRL[mask_Rretp, :][:, mask_Ladvm]
         trans_modes = np.diag(tRL.conj().T @ tRL).real
-
 
         set_trace()
 
@@ -561,31 +669,35 @@ if __name__ == "__main__":
 
         tmp_transmission_prob, tmp_irreps, tmp_idx = [], [], []
 
-
-        itp1 = (k_w == test_k)
+        itp1 = k_w == test_k
         itp2 = np.where(k_w == test_k)[0]
         num_mode = itp1.sum()
 
         tmp_idx.extend(itp2)
         vectors = eigvec_modes[itp2]
-        means = (devide_irreps(vectors, adapted, dimensions) > args.means_tol)
-
+        means = devide_irreps(vectors, adapted, dimensions) > args.means_tol
 
         set_trace()
 
-
         means_unique = np.unique(means, axis=0)
-        if means_unique.shape[0] == 1:  # degenerated q correspond to the same Irreps basis
-            irps, paras, _ = combination_paras(vectors, adapted, means, dimensions, tol=args.means_tol)
+        if (
+            means_unique.shape[0] == 1
+        ):  # degenerated q correspond to the same Irreps basis
+            irps, paras, _ = combination_paras(
+                vectors, adapted, means, dimensions, tol=args.means_tol
+            )
             tmp_irreps.extend(irps)
             probabilities = trans_modes[itp2].real
             if len(irps) != len(probabilities):
                 if (len(probabilities) - len(irps)) == 1:
                     paras_abs = np.abs(paras) ** 2
-                    paras_last = (1-paras_abs.sum(axis=0))
+                    paras_last = 1 - paras_abs.sum(axis=0)
                     paras_abs = np.vstack((paras_abs, paras_last))
 
-                    irps_last = np.where(devide_irreps(paras_last @ vectors, adapted, dimensions) > args.means_tol)[0]
+                    irps_last = np.where(
+                        devide_irreps(paras_last @ vectors, adapted, dimensions)
+                        > args.means_tol
+                    )[0]
                     tmp_irreps.extend(irps_last)
                     probabilities_new = paras_abs @ probabilities
                 else:
@@ -595,5 +707,5 @@ if __name__ == "__main__":
 
     print("The Irreps of new modes is: ", tmp_irreps)
     print("The transmission probibalities of new modes is: ", tmp_transmission_prob)
-    print("The sum of transmission in original modes:",  probabilities.sum())
-    print("The sum of transmission in new modes:",  probabilities_new.sum())
+    print("The sum of transmission in original modes:", probabilities.sum())
+    print("The sum of transmission in new modes:", probabilities_new.sum())

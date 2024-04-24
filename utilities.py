@@ -78,7 +78,7 @@ def summary_over_irreps(vecs, adapted, dimensions):
     return np.asarray([m.sum(axis=0) for m in moduli]).T
 
 
-def project_over_irreps(vecs, adapted, dimensions):
+def divide_over_irreps(vecs, adapted, dimensions):
     coefficients = adapted.T.conj() @ vecs
     # Axes in the detailed projections:
     # 0: Element in the adapted basis
