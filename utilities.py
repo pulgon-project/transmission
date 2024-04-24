@@ -78,20 +78,20 @@ def summary_over_irreps(vecs, adapted, dimensions):
     return np.asarray([m.sum(axis=0) for m in moduli]).T
 
 
-def divide_over_irreps(vecs, adapted, dimensions):
-    coefficients = adapted.T.conj() @ vecs
-    # Axes in the detailed projections:
-    # 0: Element in the adapted basis
-    # 1: Eigenvector number
-    # 2: Cartesian coordinate
-    projections = coefficients[:, :, np.newaxis] * adapted.T[:, np.newaxis, :]
-    # Now sum over the basis vectors corresponding to each irrep.
+def divide_over_irreps(vecs, basis, dimensions):
     splits = np.cumsum(dimensions)[:-1]
-    projections = np.split(projections, splits, axis=0)
-    projections = np.asarray([p.sum(axis=0) for p in projections])
-    if vecs.shape[1] > 1:
-        pass
-
+    irrep_bases = np.split(basis, splits, axis=1)
+    print("-" * 80)
+    total = 0
+    for i_b, b in enumerate(irrep_bases):
+        coefficients = np.concatenate([b, -vecs], axis=1)
+        # TODO: Handle the tolerance more sensibly and systematically.
+        kernel = la.null_space(coefficients, rcond=1e-1)
+        print(i_b, kernel.shape)
+        total += kernel.shape[1]
+    print("+" * 80)
+    print(f"Needed: {vecs.shape[1]}. Found: {total}")
+    print("-" * 80)
 
 def refine_qpoints(values, tol=1e-2):
     modules = np.abs(values)

@@ -377,6 +377,8 @@ if __name__ == "__main__":
                 )
                 summary = summary_over_irreps(group_vectors, basis, dimensions)
                 print(np.round(summary, decimals=2))
+                divide_over_irreps(group_vectors, basis, dimensions)
+            
             sys.exit(1)
 
             irreps = []
