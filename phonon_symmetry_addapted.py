@@ -66,23 +66,26 @@ def main():
     qpoints_1dim = qpoints_1dim / cyclic._pure_trans
 
     sym = []
+
     tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
     # tran = SymmOp.from_rotation_and_translation(np.eye(3), [0, 0, 1])
-    # sym.append(tran.affine_matrix)
-    pg1 = obj.get_generators()    # change the order to satisfy the character table
-
+    sym.append(tran.affine_matrix)
+    # pg1 = obj.get_generators()    # change the order to satisfy the character table
     # for pg in pg1:
     #     tmp = SymmOp(pg)
     #     sym.append(tmp.affine_matrix)       # Note: sym here must satisfy with the order of the line group book
-    sym.append(pg1[1])
-    # sym.append(pg1[0])
+    # sym.append(pg1[1])
+    rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    sym.append(rot.affine_matrix)
+
+
+    mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    # mirror = SymmOp.reflection([0,0,1])
+    sym.append(mirror.affine_matrix)
 
     # set_trace()
-    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    # sym.append(mirror.affine_matrix)
 
     # sym.append(affine_matrix_op(pg1[0], pg1[1]))
-
     # sym.append(SymmOp.from_rotation_and_translation(Cn(6), [0,0,0]).affine_matrix)
     # sym.append(SymmOp.reflection(normal=[0,0,1], origin=atom_center.get_scaled_positions()[2]).affine_matrix)
     ops, order = brute_force_generate_group_subsquent(sym, symec=1e-6)
@@ -93,15 +96,16 @@ def main():
 
     ops_car_sym = []
     for op in ops:
-        tmp_sym = SymmOp.from_rotation_and_translation(
+        tmp_sym1 = SymmOp.from_rotation_and_translation(
             op[:3, :3], op[:3, 3] * cyclic._pure_trans
         )
-        ops_car_sym.append(tmp_sym)
+        ops_car_sym.append(tmp_sym1)
     matrices = get_matrices(atom_center, ops_car_sym)
+    # set_trace()
+    # matrices = get_matrices(atom, ops_car_sym)
 
-    family = 2
+    family = 4
     characters, paras_values, paras_symbols = get_character(qpoints_1dim, nrot, order, family, a=cyclic._pure_trans)
-
     characters = np.array(characters)
     characters = characters[::2] + characters[1::2]
     paras_values = np.array(paras_values)[::2]

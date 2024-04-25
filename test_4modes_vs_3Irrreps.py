@@ -49,7 +49,8 @@ from phonopy.units import VaspToTHz
 from pymatgen.core.operations import SymmOp
 import logging
 from ase import Atoms
-from utilities import counting_y_from_xy, get_adapted_matrix, devide_irreps, divide_irreps2, combination_paras, refine_qpoints, check_same_space
+from utilities import (counting_y_from_xy, get_adapted_matrix, devide_irreps, divide_irreps2, combination_paras, refine_qpoints,
+                       check_same_space, divide_over_irreps)
 
 import cvxpy as cp
 
@@ -334,102 +335,37 @@ if __name__ == "__main__":
 
             mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
 
+            indices = np.arange(len(mask))
+            group_masks = []
+            for g in groups:
+                lo, hi = g
+                group_masks.append(mask & (indices >= lo) & (indices < hi))
+
             irreps = []
-            if mask.sum()!=0:     # not all False
-                idx_mask_end = np.where(mask)[0][-1]
+            for i_m, m in enumerate(group_masks):
+                degeneracy = m.sum()
+                if degeneracy == 0:
+                    continue
+                k_w = np.abs(np.angle(values[m][0]) / aL)
 
-                k_w = np.abs(np.angle(values[mask]) / aL)
-                k_unique = np.unique(k_w)
-                adapted, dimensions = get_adapted_matrix(k_unique, nrot, order_character, family, aL, num_atoms, matrices)
+                group_vectors = vectors[:, m]
+                basis, dimensions = get_adapted_matrix(
+                    k_w, nrot, order_character, family, aL, num_atoms, matrices
+                )
+                adapted_vecs = divide_over_irreps(group_vectors, basis, dimensions)
 
-                for g in groups:
-                    lo, hi = g
+                # res = check_same_space(group_vectors, adapted_vecs)
+                print(f"Group {i_m}: {group_vectors.shape[1]} modes")
 
-                    if hi <= idx_mask_end + 1:
-                        tmp_value = np.abs(np.angle(values[lo]) / aL)
-                        tmp_itp = np.where(k_unique == tmp_value)[0]
+                tmp_vec = []
+                for i_ir, v in enumerate(adapted_vecs):
+                    if v.shape[1] > 0:
+                        tmp_vec.append(v)
+                        irreps.extend(np.repeat(i_ir, v.shape[1]))
+                        print(f"\t- {v.shape[1]} modes in irrep #{i_ir+1}")
 
-                        if hi == lo + 1:
-                            means1 = divide_irreps2(vectors[:, lo:hi].T[0], adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-                            tmp_irreps = means1 > args.means_tol
-                            
-                            if tmp_irreps.sum()==1:
-                                irreps.extend(np.where(tmp_irreps)[0])
-                            else:
-                                set_trace()
-                                logging.ERROR('irreps more than one')
-                        elif hi > lo + 1:
-                            # if tmp_itp.size == 0:
-                            #     vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
-                            if tmp_itp.size == 1:
-                                means1 = divide_irreps2(vectors[:, lo:hi].T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-                                dim = dimensions[tmp_itp.item()][0]
-                                Irreps_num = np.round(means1.sum(axis=0)).astype(np.int32)
-
-                                if np.abs(Irreps_num - means1.sum(axis=0)).mean() < args.means_tol :
-                                    new_vec = []
-                                    for ir, reps in enumerate(Irreps_num):
-                                        if reps == 1:     # only one vector is needed in this irreps subspace
-                                            tmp_itp1 = ir * dim
-                                            tmp_itp2 = ir * dim + dim
-
-                                            # tmp1 = ((vectors[:, lo:hi].sum(axis=1) @ adapted[tmp_itp.item()]))
-                                            tmp1 = ((vectors[:, lo:hi].T @ adapted[tmp_itp.item()]))
-                                            tmp2 = tmp1[:, tmp_itp1:tmp_itp2].sum(axis=0)
-                                            tmp3 = tmp2[np.newaxis,:] @ la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
-
-                                            coefficients = np.linalg.lstsq(adapted[tmp_itp.item()][:,:18], vectors[:,lo:hi])[0]
-                                            a1 = np.dot(adapted[tmp_itp.item()][:,:18], coefficients)
-                                            tmp4 = np.linalg.matrix_rank(np.hstack((a1, vectors[:,lo:hi])))
-                                            set_trace()
-
-                                            tmp_vec = (tmp3 / la.norm(tmp3)).T
-                                            # tmp_vec = la.orth(tmp3.sum(axis=1)[:,np.newaxis])
-                                            # tmp_vec = tmp3.sum(axis=1)[:,np.newaxis]
-                                            tmp_means = divide_irreps2(tmp_vec.T[0], adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-
-                                            new_vec.append(tmp_vec)
-                                        elif reps >=2:
-                                            tmp_itp1 = ir * dim
-                                            tmp_itp2 = ir * dim + dim
-
-                                            tmp1 = (vectors[:, lo:hi].conj().T @ adapted[tmp_itp.item()])
-                                            tmp2 = tmp1[:,tmp_itp1:tmp_itp2].sum(axis=0)
-                                            # tmp3 = (tmp2[np.newaxis,:] * la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2]).T)
-                                            tmp3 = tmp2[np.newaxis,:] @ la.pinv(adapted[tmp_itp.item()][:, tmp_itp1:tmp_itp2])
-                                            tmp_vec = (tmp3 / la.norm(tmp3)).T
-
-                                            # tmp_vec = la.orth(tmp3[:,:reps])
-                                            tmp_means = divide_irreps2(tmp_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-
-                                            new_vec.append(tmp_vec)
-                                    new_vec = np.concatenate(new_vec, axis=1)
-
-                                    new_vec1 = np.linalg.qr(new_vec)[0]    # won't change the direction/ space
-                                    # new_vec2 = la.orth(new_vec)
-
-                                    # vectors[:, lo:hi] = new_vec1
-                                    # means2 = divide_irreps2(new_vec.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-                                    means2 = divide_irreps2(new_vec1.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-                                    # means2 = divide_irreps2(new_vec2.T, adapted[tmp_itp.item()], dimensions[tmp_itp.item()])
-                                    set_trace()
-
-                                    if not check_same_space(new_vec1, vectors[:, lo:hi]):
-                                        set_trace()
-                                        logging.ERROR("new eigenvectors and original engenvectors are not in the same space")
-
-                                    tmp_irreps = means2 > args.means_tol
-                                    if (tmp_irreps.sum(axis=1)==1).all():
-                                        irreps.extend(np.where(tmp_irreps)[1])
-                                    else:
-                                        set_trace()
-                                        logging.ERROR("Each vector can only corrrespond to one irreps")
-                                else:
-                                    set_trace()
-                                    logging.ERROR("It's not close to an integer")
-                            else:
-                                set_trace()
-                                logging.ERROR("No corresponding k within mask")
+                tmp_vec = np.concatenate(tmp_vec, axis=1)
+                vectors[:, m] = tmp_vec
             return values, vectors, mask, irreps
 
 
@@ -559,7 +495,6 @@ if __name__ == "__main__":
         tRL = tRL[mask_Rretp, :][:, mask_Ladvm]
         trans_modes = np.diag(tRL.conj().T @ tRL).real
 
-
         set_trace()
 
         # tRL2 = tRL[mask_Rretp, :][:, mask_Ladvm][:2,:2]
@@ -578,7 +513,6 @@ if __name__ == "__main__":
         print("k=", test_k)
 
         tmp_transmission_prob, tmp_irreps, tmp_idx = [], [], []
-
 
         itp1 = (k_w == test_k)
         itp2 = np.where(k_w == test_k)[0]

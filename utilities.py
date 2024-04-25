@@ -39,7 +39,76 @@ def unit_basis_complex_vectors(complex_vectors):
 #     return normalized_complex_vectors
 
 
-def get_adapted_matrix(qpoints, nrot, order, family, a, num_atom, matrices):
+# def get_adapted_matrix(qpoints, nrot, order, family, a, num_atom, matrices):
+#     adapteds, dimensions = [], []
+#     for qp in qpoints:
+#         characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
+#         characters = np.array(characters)
+#         characters = characters[::2] + characters[1::2]   # depend on the dimension of the character
+#
+#         ndof = 3 * num_atom
+#         remaining_dof = copy.deepcopy(ndof)
+#         adapted = []
+#         dimension = []
+#         for ii, chara in enumerate(characters):  # loop quantum number
+#             projector = np.zeros((ndof, ndof), dtype=np.complex128)
+#             # prefactor = chara[0].real / len(chara)
+#             for kk in range(len(chara)):  # loop ops
+#                 # projector += prefactor * chara[kk] * matrices[kk]
+#                 projector += chara[kk] * matrices[kk]
+#
+#             basis = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+#             adapted.append(basis)
+#
+#             remaining_dof -= basis.shape[1]
+#             dimension.append(basis.shape[1])
+#         adapted = np.concatenate(adapted, axis=1)
+#         adapteds.append(adapted)
+#         dimensions.append(dimension)
+#
+#         if adapted.shape[0] != adapted.shape[1]:
+#             print(ii, adapted.shape)
+#             print(dimension)
+#             set_trace()
+#             logging.ERROR("the shape of adapted not equal")
+#     return adapteds, dimensions
+
+
+def get_adapted_matrix(qp, nrot, order, family, a, num_atom, matrices):
+    characters, paras_values, paras_symbols = get_character(
+        [qp], nrot, order, family, a
+    )
+    characters = np.array(characters)
+    characters = (
+        characters[::2] + characters[1::2]
+    )  # depend on the dimension of the character
+
+    ndof = 3 * num_atom
+    remaining_dof = copy.deepcopy(ndof)
+    adapted = []
+    dimension = []
+    for ii, chara in enumerate(characters):  # loop quantum number
+        projector = np.zeros((ndof, ndof), dtype=np.complex128)
+        # prefactor = chara[0].real / len(chara)
+        for kk in range(len(chara)):  # loop ops
+            # projector += prefactor * chara[kk] * matrices[kk]
+            projector += chara[kk] * matrices[kk]
+
+        basis = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+        adapted.append(basis)
+
+        remaining_dof -= basis.shape[1]
+        dimension.append(basis.shape[1])
+    adapted = np.concatenate(adapted, axis=1)
+
+    if adapted.shape[0] != adapted.shape[1]:
+        print(ii, adapted.shape)
+        print(dimension)
+        set_trace()
+        logging.ERROR("the shape of adapted not equal")
+    return adapted, dimension
+
+def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrices):
     adapteds, dimensions = [], []
     for qp in qpoints:
         characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
@@ -72,6 +141,8 @@ def get_adapted_matrix(qpoints, nrot, order, family, a, num_atom, matrices):
             set_trace()
             logging.ERROR("the shape of adapted not equal")
     return adapteds, dimensions
+
+
 
 
 def devide_irreps(vec, adapted, dimensions):
@@ -111,6 +182,28 @@ def divide_irreps2(vec, adapted, dimensions):
     if means.ndim > 1:
         means = means.T
     return np.array(means)
+
+
+def divide_over_irreps(vecs, basis, dimensions):
+    n_vecs = vecs.shape[1]
+    splits = np.cumsum(dimensions)[:-1]
+    irrep_bases = np.split(basis, splits, axis=1)
+    adapted_vecs = []
+    for b in irrep_bases:
+        combined_matrix = np.concatenate([vecs, -b], axis=1)
+        # TODO: Handle the tolerance more sensibly and systematically.
+        kernel = la.null_space(combined_matrix, rcond=1e-1)
+        n_solutions = kernel.shape[1]
+        coefficients = kernel[:n_vecs, :]
+        new_vecs = vecs @ coefficients
+        if n_solutions > 0:
+            new_vecs = la.orth(new_vecs)
+        adapted_vecs.append(new_vecs)
+    found = sum(v.shape[1] for v in adapted_vecs)
+    if found != n_vecs:
+        raise ValueError(f"{n_vecs} were needed, but {found} were found")
+    return adapted_vecs
+
 
 
 def refine_qpoints(values, tol=1e-2):
