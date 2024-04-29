@@ -151,11 +151,11 @@ if __name__ == "__main__":
     # for pg in pg1:
     #     tmp = SymmOp(pg)
     #     sym.append(tmp.affine_matrix)       # Note: sym here must satisfy with the order of the line group book
-    # sym.append(pg1[0])
+    sym.append(pg1[0])
     # sym.append(pg1[1])
     # set_trace()
-    rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    sym.append(rot.affine_matrix)
+    # rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    # sym.append(rot.affine_matrix)
     mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
     sym.append(mirror.affine_matrix)
 
@@ -331,11 +331,12 @@ if __name__ == "__main__":
         irreps = []
         if mask.sum() != 0:  # not all False
             # idx_mask_end = np.where(mask)[0][-1]
-            k_w = np.abs(np.angle(values[mask]) / aL / 2 / np.pi)
+            k_w = np.abs(np.angle(values[mask])) / aL
             # k_w = np.arccos(values[mask].real) / aL
             k_adapteds = np.unique(k_w)
             adapteds, dimensions = get_adapted_matrix_multiq(k_adapteds, nrot, order_ops, family, aL, num_atoms, matrices)
 
+        # adapted0, dim0 = get_adapted_matrix(0, nrot, order_ops, family, aL, num_atoms, matrices)
         def orthogonalize(values, vectors, adapteds, k_adapteds, dimensions):
             modules = np.abs(values)
             phases = np.angle(values)
@@ -373,7 +374,9 @@ if __name__ == "__main__":
                 if degeneracy == 0:
                     continue
 
-                k_w_group = np.abs(np.angle(values[m][0]) / aL /2 /np.pi)
+                k_w_group = np.abs(np.angle(values[m][0])) / aL
+                # k_w_group = np.arccos(values[m][0].real) / aL
+
                 # print("k_w_group: ", k_w_group)
                 # k_w_group = np.arccos(values[m][0].real) / aL
 
@@ -383,11 +386,11 @@ if __name__ == "__main__":
                     set_trace()
                     logging.ERROR("No correspond k indices")
                 basis, dims = adapteds[k_w_group_indice], dimensions[k_w_group_indice]
-                # basis, dimensions = get_adapted_matrix(k_w, nrot, order_character, family, aL, num_atoms, matrices)
+                # basis, dims = adapted0, dim0
 
                 group_vectors = vectors[:, m]
                 try:
-                    # tmp = divide_irreps2(group_vectors.T, basis, dims).sum(axis=0)
+                    # tmp = divide_irreps(group_vectors.T, basis, dims).sum(axis=0)
                     adapted_vecs = divide_over_irreps(group_vectors, basis, dims)
                 except:
                     set_trace()

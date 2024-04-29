@@ -53,8 +53,8 @@ def main():
     nrot = obj.get_rotational_symmetry_number()
 
     NQS = 51
-    # k_start = -np.pi+0.1
-    k_start = 0
+    k_start = -np.pi+0.1
+    # k_start = 0
     k_end = np.pi-0.1
 
     path = [[[0, 0, k_start/2/np.pi], [0, 0, k_end/2/np.pi]]]
@@ -63,7 +63,8 @@ def main():
     )
     qpoints = qpoints[0]
 
-    qpoints_1dim = np.linspace(k_start/2/np.pi, k_end/2/np.pi, num=NQS, endpoint=k_end)
+    # qpoints_1dim = np.linspace(k_start, k_end, num=NQS, endpoint=k_end)
+    qpoints_1dim = np.zeros(NQS)
     # qpoints_1dim = np.linspace(k_start, k_end, num=NQS, endpoint=k_end)
     qpoints_1dim = qpoints_1dim / cyclic._pure_trans
 
