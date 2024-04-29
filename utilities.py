@@ -33,48 +33,22 @@ def unit_basis_complex_vectors(complex_vectors):
         print("Error: The dimension is not correct")
 
 
-# def normalize_complex_vectors(complex_vectors):
-#     magnitudes = np.sqrt(np.sum(np.abs(complex_vectors) ** 2, axis=1))
-#     normalized_complex_vectors = complex_vectors / magnitudes[:, np.newaxis]
-#     return normalized_complex_vectors
-
-
-# def get_adapted_matrix(qpoints, nrot, order, family, a, num_atom, matrices):
-#     adapteds, dimensions = [], []
-#     for qp in qpoints:
-#         characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
-#         characters = np.array(characters)
-#         characters = characters[::2] + characters[1::2]   # depend on the dimension of the character
-#
-#         ndof = 3 * num_atom
-#         remaining_dof = copy.deepcopy(ndof)
-#         adapted = []
-#         dimension = []
-#         for ii, chara in enumerate(characters):  # loop quantum number
-#             projector = np.zeros((ndof, ndof), dtype=np.complex128)
-#             # prefactor = chara[0].real / len(chara)
-#             for kk in range(len(chara)):  # loop ops
-#                 # projector += prefactor * chara[kk] * matrices[kk]
-#                 projector += chara[kk] * matrices[kk]
-#
-#             basis = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
-#             adapted.append(basis)
-#
-#             remaining_dof -= basis.shape[1]
-#             dimension.append(basis.shape[1])
-#         adapted = np.concatenate(adapted, axis=1)
-#         adapteds.append(adapted)
-#         dimensions.append(dimension)
-#
-#         if adapted.shape[0] != adapted.shape[1]:
-#             print(ii, adapted.shape)
-#             print(dimension)
-#             set_trace()
-#             logging.ERROR("the shape of adapted not equal")
-#     return adapteds, dimensions
-
-
 def get_adapted_matrix(qp, nrot, order, family, a, num_atom, matrices):
+    """
+
+    Args:
+        qp: q/k point
+        nrot: The rotational quantum number of the structure "Cn"
+        order: The multiplication order from generators to symmetry operations
+        family: The line group family index
+        a: The period length in z direction
+        num_atom: The number of atoms
+        matrices:
+
+    Returns:
+        adapted: The symmetry projection basis matrix for irreducible representation
+
+    """
     characters, paras_values, paras_symbols = get_character(
         [qp], nrot, order, family, a
     )
@@ -108,7 +82,10 @@ def get_adapted_matrix(qp, nrot, order, family, a, num_atom, matrices):
         logging.ERROR("the shape of adapted not equal")
     return adapted, dimension
 
+
 def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrices):
+    """ The same with function:get_adapted_matrix but for multi-q points
+    """
     adapteds, dimensions = [], []
     for qp in qpoints:
         characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
@@ -143,26 +120,17 @@ def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrice
     return adapteds, dimensions
 
 
+def divide_irreps(vec, adapted, dimensions):
+    """
 
+    Args:
+        vec:
+        adapted:
+        dimensions:
 
-def devide_irreps(vec, adapted, dimensions):
-    tmp1 = vec @ adapted
-    start = 0
-    means = []
-    for im, dim in enumerate(dimensions):
-        end = start + dim
-        if vec.ndim == 1:
-            means.append(np.abs(tmp1[start:end]).sum())
+    Returns:
 
-        else:
-            means.append(np.abs(tmp1[:, start:end]).sum(axis=1))
-        start = copy.copy(end)
-    means = np.array(means)
-    if means.ndim > 1:
-        means = means.T
-    return np.array(means)
-
-def divide_irreps2(vec, adapted, dimensions):
+    """
     # tmp1 = vec @ adapted.conj()
     tmp1 = vec @ adapted
     start = 0
@@ -185,6 +153,17 @@ def divide_irreps2(vec, adapted, dimensions):
 
 
 def divide_over_irreps(vecs, basis, dimensions):
+    """
+
+    Args:
+        vecs: original eigenvectors spanning different irreps
+        basis: the symmetry-adapted basis
+        dimensions: the dimension of each irrep
+
+    Returns:
+        adapted_vecs: new eigenvectors, each of them spanning only one irrep
+
+    """
     n_vecs = vecs.shape[1]
     splits = np.cumsum(dimensions)[:-1]
     irrep_bases = np.split(basis, splits, axis=1)
@@ -201,9 +180,9 @@ def divide_over_irreps(vecs, basis, dimensions):
         adapted_vecs.append(new_vecs)
     found = sum(v.shape[1] for v in adapted_vecs)
     if found != n_vecs:
+        # set_trace()
         raise ValueError(f"{n_vecs} were needed, but {found} were found")
     return adapted_vecs
-
 
 
 def refine_qpoints(values, tol=1e-2):
@@ -248,7 +227,7 @@ def combination_paras(vectors, adapted, means, dimensions, tol=1e-3):
 
         res = paras @ vectors
         U_irreps = res[0]
-        means = devide_irreps(U_irreps, adapted, dimensions)
+        means = divide_irreps(U_irreps, adapted, dimensions)
 #        paras = paras[0]   # row vector
         paras = np.eye(vectors.shape[0])
 
@@ -286,10 +265,9 @@ def combination_paras(vectors, adapted, means, dimensions, tol=1e-3):
     return irreps, paras, means
 
 
-
-
-
 def check_same_space(array1, array2):
+    """ Check whether these two vectors from the same space or not
+    """
     rank_array1 = np.linalg.matrix_rank(array1)
     rank_array2 = np.linalg.matrix_rank(array2)
 

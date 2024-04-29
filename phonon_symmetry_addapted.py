@@ -31,7 +31,7 @@ from pulgon_tools_wip.utils import (
 )
 from pymatgen.core.operations import SymmOp
 from tqdm import tqdm
-from utilities import counting_y_from_xy
+from utilities import counting_y_from_xy, get_adapted_matrix
 
 
 def main():
@@ -52,8 +52,9 @@ def main():
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     nrot = obj.get_rotational_symmetry_number()
 
-    NQS = 101
-    k_start = -np.pi+0.1
+    NQS = 51
+    # k_start = -np.pi+0.1
+    k_start = 0
     k_end = np.pi-0.1
 
     path = [[[0, 0, k_start/2/np.pi], [0, 0, k_end/2/np.pi]]]
@@ -62,28 +63,19 @@ def main():
     )
     qpoints = qpoints[0]
 
-    qpoints_1dim = np.linspace(k_start, k_end, num=NQS, endpoint=k_end)
+    qpoints_1dim = np.linspace(k_start/2/np.pi, k_end/2/np.pi, num=NQS, endpoint=k_end)
+    # qpoints_1dim = np.linspace(k_start, k_end, num=NQS, endpoint=k_end)
     qpoints_1dim = qpoints_1dim / cyclic._pure_trans
 
     sym = []
-
     tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    # tran = SymmOp.from_rotation_and_translation(np.eye(3), [0, 0, 1])
     sym.append(tran.affine_matrix)
-    # pg1 = obj.get_generators()    # change the order to satisfy the character table
-    # for pg in pg1:
-    #     tmp = SymmOp(pg)
-    #     sym.append(tmp.affine_matrix)       # Note: sym here must satisfy with the order of the line group book
+    pg1 = obj.get_generators()    # change the order to satisfy the character table
     # sym.append(pg1[1])
     rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
     sym.append(rot.affine_matrix)
-
-
     mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    # mirror = SymmOp.reflection([0,0,1])
     sym.append(mirror.affine_matrix)
-
-    # set_trace()
 
     # sym.append(affine_matrix_op(pg1[0], pg1[1]))
     # sym.append(SymmOp.from_rotation_and_translation(Cn(6), [0,0,0]).affine_matrix)
@@ -105,47 +97,21 @@ def main():
     # matrices = get_matrices(atom, ops_car_sym)
 
     family = 4
-    characters, paras_values, paras_symbols = get_character(qpoints_1dim, nrot, order, family, a=cyclic._pure_trans)
-    characters = np.array(characters)
-    characters = characters[::2] + characters[1::2]
-    paras_values = np.array(paras_values)[::2]
+    # characters, paras_values, paras_symbols = get_character(qpoints_1dim, nrot, order, family, a=cyclic._pure_trans)
+    # characters = np.array(characters)
+    # characters = characters[::2] + characters[1::2]
+    # paras_values = np.array(paras_values)[::2]
     # paras_values = np.array(paras_values)
 
 
     frequencies, distances, bands = [], [], []
-    ndof = 3 * len(atom.numbers)
+    num_atom = len(atom.numbers)
     for ii, qp in enumerate(tqdm(qpoints_1dim)):   # loop q points
-        idx = np.where(np.isclose(paras_values[:,0], qp))[0]
-        if len(idx)!=int(len(characters)/NQS):
-            set_trace()
-            logging.ERROR("the number of quantum incorrect")
 
+        adapted, dimensions = get_adapted_matrix(qp, nrot, order, family, cyclic._pure_trans, num_atom, matrices)
         qz = qpoints[ii]
+
         D = phonon.get_dynamical_matrix_at_q(qz)
-        dimensions, adapted = [], []
-        remaining_dof = copy.deepcopy(ndof)
-
-        for jj in idx:     # loop quantum number
-            chara = characters[jj]
-            projector = np.zeros((ndof, ndof), dtype=np.complex128)
-
-            # prefactor = chara[0].real / len(chara)
-            for kk in range(len(chara)):                # loop ops
-                # projector += prefactor * chara[kk] * matrices[kk]
-                projector += chara[kk] * matrices[kk]
-            basis = fast_orth(projector, remaining_dof, int(ndof/len(idx)))
-            adapted.append(basis)
-            remaining_dof -= basis.shape[1]
-            dimensions.append(basis.shape[1])
-
-        adapted = np.concatenate(adapted, axis=1)
-        if adapted.shape[0] != adapted.shape[1]:
-            # print(adapted.shape)
-            print(ii, jj, adapted.shape)
-            print(dimensions)
-            set_trace()
-            logging.ERROR("the shape of adapted not equal")
-
         D = adapted.conj().T @ D @ adapted
         start = 0
         tmp_band = []
@@ -219,7 +185,7 @@ def main():
     plt.xlabel("distances")
     plt.ylabel("frequencies Thz")
     plt.legend()
-    plt.savefig(path_save_phonon, dpi=600)
+    # plt.savefig(path_save_phonon, dpi=600)
 
 
     fig1, ax1 = plt.subplots()

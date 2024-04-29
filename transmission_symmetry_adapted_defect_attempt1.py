@@ -50,7 +50,7 @@ from phonopy.units import VaspToTHz
 from pymatgen.core.operations import SymmOp
 import logging
 from ase import Atoms
-from utilities import counting_y_from_xy, get_adapted_matrix, divide_irreps2, combination_paras, refine_qpoints, divide_over_irreps, get_adapted_matrix_multiq
+from utilities import counting_y_from_xy, get_adapted_matrix, divide_irreps, combination_paras, refine_qpoints, divide_over_irreps, get_adapted_matrix_multiq
 
 matplotlib.rcParams["font.size"] = 16.0
 NPOINTS = 50
@@ -127,38 +127,37 @@ if __name__ == "__main__":
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
     atom = cyclic._primitive
     atom_center = find_axis_center_of_nanotube(atom)
-    family = 2
+    family = 4
+    num_irreps = 12
 
-    k_start = -np.pi
-    k_end = np.pi
-
-    path = [[[0, 0, k_start / 2 / np.pi], [0, 0, k_end / 2 / np.pi]]]
-    qpoints, connections = get_band_qpoints_and_path_connections(
-        path, npoints=NPOINTS
-    )
-    qpoints = qpoints[0]
-
-    qpoints_1dim = np.linspace(k_start, k_end, num=NPOINTS, endpoint=k_end)
-    a = cyclic._pure_trans
-    qpoints_1dim = qpoints_1dim / a
+    # k_start = -np.pi + 0.1
+    # k_end = np.pi - 0.1
+    # path = [[[0, 0, k_start / 2 / np.pi], [0, 0, k_end / 2 / np.pi]]]
+    # qpoints, connections = get_band_qpoints_and_path_connections(
+    #     path, npoints=NPOINTS
+    # )
+    # qpoints = qpoints[0]
+    # qpoints_1dim = np.linspace(k_start/ 2 / np.pi, k_end/ 2 / np.pi, num=NPOINTS, endpoint=k_end)
+    # qpoints_1dim = np.linspace(k_start, k_end, num=NPOINTS, endpoint=k_end)
+    # qpoints_1dim = qpoints_1dim / cyclic._pure_trans
 
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     nrot = obj.get_rotational_symmetry_number()
 
     sym = []
-    # tran = SymmOp.from_rotation_and_translation(np.eye(3), [0, 0, 1])
-    # tran = SymmOp.from_rotation_and_translation(Cn(2 * nrot), [0, 0, 1 / 2])
+    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    sym.append(tran.affine_matrix)
     pg1 = obj.get_generators()    # change the order to satisfy the character table
-    sym.append(pg1[1])
-
-    # S12 = np.array([[0.8660254, -0.5, 0., 0.],
-    #                 [0.5, 0.8660254, 0., 0.],
-    #                 [0., 0., -1., 0.],
-    #                 [0., 0., 0., 1.]])
-    # sym.append(S12)
+    # for pg in pg1:
+    #     tmp = SymmOp(pg)
+    #     sym.append(tmp.affine_matrix)       # Note: sym here must satisfy with the order of the line group book
+    # sym.append(pg1[0])
+    # sym.append(pg1[1])
     # set_trace()
-    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    # sym.append(mirror.affine_matrix)
+    rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    sym.append(rot.affine_matrix)
+    mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    sym.append(mirror.affine_matrix)
 
     ops, order_ops = brute_force_generate_group_subsquent(sym)
     if len(ops) != len(order_ops):
@@ -216,7 +215,7 @@ if __name__ == "__main__":
 
     # Plot the phonon spectra of both bulk leads.
     # qvec = np.linspace(0.0, 2.0 * np.pi, num=1001)
-    qvec = np.linspace(-np.pi, np.pi, num=NPOINTS)
+    qvec = np.linspace(-np.pi, np.pi, num=NPOINTS*10)
     omegaL, vgL = decimation.q2omega(HL, TL, qvec)
     # Compute all the parameters of the interface
     inc_omega = np.linspace(1e-1, omegaL.max() * 1.01, num=NPOINTS, endpoint=True)
@@ -229,9 +228,10 @@ if __name__ == "__main__":
     HR_complex = HR.astype(complex)
     TR_complex = TR.astype(complex)
     matrices_prob, Irreps = [], []
-    NLp_irreps = np.zeros((6, NPOINTS))  # the number of im
+
+    NLp_irreps = np.zeros((num_irreps, NPOINTS))  # the number of im
     for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
-        # omega=56.77013783915039
+        # omega = 7.656578907447281
 
         en = omega * (omega + 1.0j * args.eps)
         # Build the four retarded GFs of leads extending left or right.
@@ -304,16 +304,17 @@ if __name__ == "__main__":
             GRLret @ (GRLret @ GammaL.conj().T).conj().T @ GammaR
         ).real
 
+
         values, vectors = la.eig(FLretp)
         modules = np.abs(values)
         order_val = np.argsort(-modules)
-        values = np.copy(values[order_val])
+        values = values[order_val]
         lo = 0
         hi = 1
         groups = []
         while True:
             if hi >= vectors.shape[1] or not np.isclose(
-                    np.angle(values[hi]), np.angle(values[hi - 1]), rtol=args.rtol, atol=args.atol,
+                    values[hi], values[hi - 1], rtol=args.rtol, atol=args.atol,
             ):
                 groups.append((lo, hi))
                 lo = hi
@@ -330,10 +331,10 @@ if __name__ == "__main__":
         irreps = []
         if mask.sum() != 0:  # not all False
             # idx_mask_end = np.where(mask)[0][-1]
-            k_w = np.abs(np.angle(values[mask]) / aL)
+            k_w = np.abs(np.angle(values[mask]) / aL / 2 / np.pi)
+            # k_w = np.arccos(values[mask].real) / aL
             k_adapteds = np.unique(k_w)
             adapteds, dimensions = get_adapted_matrix_multiq(k_adapteds, nrot, order_ops, family, aL, num_atoms, matrices)
-
 
         def orthogonalize(values, vectors, adapteds, k_adapteds, dimensions):
             modules = np.abs(values)
@@ -346,7 +347,7 @@ if __name__ == "__main__":
             groups = []
             while True:
                 if hi >= vectors.shape[1] or not np.isclose(
-                        np.angle(values[hi]), np.angle(values[hi - 1]), rtol=args.rtol, atol=args.atol,
+                        values[hi], values[hi - 1], rtol=args.rtol, atol=args.atol,
                 ):
                     groups.append((lo, hi))
                     lo = hi
@@ -372,25 +373,27 @@ if __name__ == "__main__":
                 if degeneracy == 0:
                     continue
 
-                k_w = np.abs(np.angle(values[mask][0]) / aL)
-
+                k_w_group = np.abs(np.angle(values[m][0]) / aL /2 /np.pi)
+                # print("k_w_group: ", k_w_group)
+                # k_w_group = np.arccos(values[m][0].real) / aL
 
                 try:
-                    k_w_indice = np.where(np.isclose(k_w, k_adapteds))[0].item()
+                    k_w_group_indice = np.where(np.isclose(k_w_group, k_adapteds))[0].item()
                 except:
                     set_trace()
                     logging.ERROR("No correspond k indices")
-
-                basis, dims = adapteds[k_w_indice], dimensions[k_w_indice]
-
+                basis, dims = adapteds[k_w_group_indice], dimensions[k_w_group_indice]
                 # basis, dimensions = get_adapted_matrix(k_w, nrot, order_character, family, aL, num_atoms, matrices)
 
                 group_vectors = vectors[:, m]
-                adapted_vecs = divide_over_irreps(group_vectors, basis, dims)
+                try:
+                    # tmp = divide_irreps2(group_vectors.T, basis, dims).sum(axis=0)
+                    adapted_vecs = divide_over_irreps(group_vectors, basis, dims)
+                except:
+                    set_trace()
 
                 # res = check_same_space(group_vectors, adapted_vecs)
                 # print(f"Group {i_m}: {group_vectors.shape[1]} modes")
-
                 tmp_vec = []
                 for i_ir, v in enumerate(adapted_vecs):
                     if v.shape[1] > 0:
@@ -405,12 +408,12 @@ if __name__ == "__main__":
 
         # # Solve the corresponding eigenvalue equations for the leads.
         # # Look for degenerate modes and orthonormalize them.
+        ALadvm, ULadvm, mask_Ladvm, tmp_irreps = orthogonalize(*la.eig(inv_FLadvm), adapteds, k_adapteds, dimensions)
         ALretp, ULretp, mask_Lretp, _ = orthogonalize(*la.eig(FLretp), adapteds, k_adapteds, dimensions)
         ARretp, URretp, mask_Rretp, _ = orthogonalize(*la.eig(FRretp), adapteds, k_adapteds, dimensions)
         ALadvp, ULadvp, mask_Ladvp, _ = orthogonalize(*la.eig(FLadvp), adapteds, k_adapteds, dimensions)
         ARadvp, URadvp, mask_Radvp, _ = orthogonalize(*la.eig(FRadvp), adapteds, k_adapteds, dimensions)
 
-        ALadvm, ULadvm, mask_Ladvm, tmp_irreps = orthogonalize(*la.eig(inv_FLadvm), adapteds, k_adapteds, dimensions)
         ALretm, ULretm, mask_Lretm, _ = orthogonalize(*la.eig(inv_FLretm), adapteds, k_adapteds, dimensions)
         ARretm, URretm, mask_Rretm, _ = orthogonalize(*la.eig(inv_FRretm), adapteds, k_adapteds, dimensions)
         ARadvm, URadvm, mask_Radvm, _ = orthogonalize(*la.eig(inv_FRadvm), adapteds, k_adapteds, dimensions)
