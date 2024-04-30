@@ -68,11 +68,14 @@ def get_adapted_matrix(qp, nrot, order, family, a, num_atom, matrices):
 def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrices):
     """ The same with function:get_adapted_matrix but for multi-q points
     """
-    adapteds, dimensions = [], []
+    adapteds, dimensions, chas = [], [], []
     for qp in qpoints:
         characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
         characters = np.array(characters)
         characters = characters[::2] + characters[1::2]   # depend on the dimension of the character
+
+        # characters = np.round(characters, 6)
+        chas.append(characters)
 
         ndof = 3 * num_atom
         remaining_dof = copy.deepcopy(ndof)
@@ -163,7 +166,7 @@ def divide_over_irreps(vecs, basis, dimensions):
         adapted_vecs.append(new_vecs)
     found = sum(v.shape[1] for v in adapted_vecs)
     if found != n_vecs:
-        set_trace()
+        # res = divide_irreps(vecs.T,basis,dimensions)
         raise ValueError(f"{n_vecs} were needed, but {found} were found")
     return adapted_vecs
 
@@ -181,5 +184,4 @@ def check_same_space(array1, array2):
         if space1 == space2 == rank_array1:
             return True
     return False
-
 

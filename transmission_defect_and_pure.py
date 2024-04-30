@@ -108,8 +108,6 @@ if __name__ == "__main__":
     phonon = phonopy.load(phonopy_yaml=path_phonopy)
     poscar = ase.io.read(path_poscar)
 
-
-
     LR_blocks = np.load(path_LR_blocks)
     scatter_blocks = np.load(path_scatter_blocks)
     defect_indices = np.load(path_defect_indices)["defect_indices"]
@@ -119,7 +117,6 @@ if __name__ == "__main__":
     KC = scatter_blocks["Hc"]
     VLC = scatter_blocks["Vlc"]
     VCR = scatter_blocks["Vcr"]
-
 
     cells = max(defect_indices) + 1
     idx_scatter = np.where(defect_indices==int((cells-1)/2))[0]
@@ -192,6 +189,7 @@ if __name__ == "__main__":
             args.decimation,
             args.maxiter,
         )
+
         # And the four advanced versions, i.e., their Hermitian conjugates.
         inv_gLadvm = inv_gLretm.conj().T
         inv_gLadvp = inv_gLretp.conj().T

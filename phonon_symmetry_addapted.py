@@ -63,9 +63,7 @@ def main():
     )
     qpoints = qpoints[0]
 
-    # qpoints_1dim = np.linspace(k_start, k_end, num=NQS, endpoint=k_end)
-    qpoints_1dim = np.zeros(NQS)
-    # qpoints_1dim = np.linspace(k_start, k_end, num=NQS, endpoint=k_end)
+    qpoints_1dim = qpoints[:,2] * 2 * np.pi
     qpoints_1dim = qpoints_1dim / cyclic._pure_trans
 
     sym = []
@@ -249,7 +247,7 @@ def main():
     plt.ylim(bottom=0.0)
 
     plt.legend()
-    # plt.savefig(path_save_phonon_transmission, dpi=600)
+    plt.savefig(path_save_phonon_transmission, dpi=600)
 
     plt.show()
 
