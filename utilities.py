@@ -15,24 +15,6 @@ def counting_y_from_xy(y,xy, direction=1, tolerance=1e-5):
     return counts
 
 
-def unit_basis_complex_vectors(complex_vectors):
-    if complex_vectors.ndim == 1:
-        moduli = np.abs(complex_vectors)
-        unit_complex_vectors = complex_vectors / moduli
-
-        # set_trace()
-        return unit_complex_vectors
-    elif complex_vectors.ndim ==2:
-        unit_complex_vectors = []
-        for vec in complex_vectors:
-            moduli = np.abs(vec)
-            unit_complex_vectors.append(vec / moduli)
-        unit_complex_vectors = np.array(unit_complex_vectors)
-        return unit_complex_vectors
-    else:
-        print("Error: The dimension is not correct")
-
-
 def get_adapted_matrix(qp, nrot, order, family, a, num_atom, matrices):
     """
 
@@ -168,6 +150,7 @@ def divide_over_irreps(vecs, basis, dimensions):
     splits = np.cumsum(dimensions)[:-1]
     irrep_bases = np.split(basis, splits, axis=1)
     adapted_vecs = []
+
     for b in irrep_bases:
         combined_matrix = np.concatenate([vecs, -b], axis=1)
         # TODO: Handle the tolerance more sensibly and systematically.
@@ -180,89 +163,9 @@ def divide_over_irreps(vecs, basis, dimensions):
         adapted_vecs.append(new_vecs)
     found = sum(v.shape[1] for v in adapted_vecs)
     if found != n_vecs:
-        # set_trace()
+        set_trace()
         raise ValueError(f"{n_vecs} were needed, but {found} were found")
     return adapted_vecs
-
-
-def refine_qpoints(values, tol=1e-2):
-    modules = np.abs(values)
-    order = np.argsort(modules)
-    values = np.copy(values[order])
-    lo = 0
-    hi = 1
-    groups = []
-
-    while True:
-        if hi >= values.shape[0] or not np.isclose(
-                values[hi], values[hi - 1], tol
-        ):
-            groups.append((lo, hi))
-            lo = hi
-        if hi > len(values):
-            break
-        hi += 1
-    for g in groups:
-        lo, hi = g
-        if hi > lo + 1:
-            values[lo:hi] = values[lo:hi].mean()
-    return values, order
-
-
-def combination_paras(vectors, adapted, means, dimensions, tol=1e-3):
-    if len(np.unique(dimensions)) != 1:
-        logging.Error("the length of dimension not equal")
-    dim = dimensions[0]
-
-    idx1 = means
-    itp_basis = np.unique(np.where(idx1)[1])
-    # if idx1[0].sum()==1:
-    if len(itp_basis)==1:
-        irreps = np.where(idx1[0])[0].repeat(vectors.shape[0])
-        itp1 = itp_basis * dim
-        itp2 = itp1 + dim
-        proj = vectors @ adapted
-        paras = la.pinv(proj[:, itp1.item(): itp2.item()])
-        paras = paras / np.linalg.norm(paras, axis=1)[:, np.newaxis]    # normalization
-
-        res = paras @ vectors
-        U_irreps = res[0]
-        means = divide_irreps(U_irreps, adapted, dimensions)
-#        paras = paras[0]   # row vector
-        paras = np.eye(vectors.shape[0])
-
-    else:
-        # itp1 = np.where(idx1[0])[0] * dim
-        itp1 = itp_basis * dim
-        itp2 = itp1 + dim
-        proj = vectors @ adapted
-
-        for it, (tmp1, tmp2) in enumerate(zip(itp1, itp2)):
-            if it == 0:
-                tmp_matrix = proj[:, tmp1:tmp2]
-            else:
-                tmp_matrix = np.hstack((tmp_matrix, proj[:, tmp1:tmp2]))
-        paras = la.pinv(tmp_matrix)
-        paras = paras / np.linalg.norm(paras, axis=1)[:,np.newaxis]   # normalization
-
-        paras = paras[::dim]   # row vector
-        res = paras @ vectors
-
-        U_irreps = res
-        proj1 = U_irreps @ adapted
-        start = 0
-        means = []
-        for im, _ in enumerate(dimensions):
-            end = start + dim
-            means.append(np.abs(proj1[:, start:end]).sum(axis=1))
-            start = copy.copy(end)
-        means = np.array(means)
-        idx2 = (np.abs(means) > tol).T
-        irreps = np.where(idx2)[1]
-        # if len(irreps)!=vectors.shape[0]:
-        #     set_trace()
-        #     logging.ERROR("the shape of irreps incorect")
-    return irreps, paras, means
 
 
 def check_same_space(array1, array2):

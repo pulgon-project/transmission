@@ -50,7 +50,7 @@ from phonopy.units import VaspToTHz
 from pymatgen.core.operations import SymmOp
 import logging
 from ase import Atoms
-from utilities import counting_y_from_xy, get_adapted_matrix, divide_irreps, divide_over_irreps, get_adapted_matrix_multiq
+from utilities import divide_irreps, divide_over_irreps, get_adapted_matrix_multiq
 
 matplotlib.rcParams["font.size"] = 16.0
 NPOINTS = 50
@@ -230,6 +230,7 @@ if __name__ == "__main__":
     matrices_prob, Irreps = [], []
 
     NLp_irreps = np.zeros((num_irreps, NPOINTS))  # the number of im
+
     for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
         omega = 7.656578907447281
 
@@ -304,7 +305,7 @@ if __name__ == "__main__":
             GRLret @ (GRLret @ GammaL.conj().T).conj().T @ GammaR
         ).real
 
-
+        ########## Move the calculation of adapted matrix out of "orthogonalize" function   ############
         values, vectors = la.eig(FLretp)
         modules = np.abs(values)
         order_val = np.argsort(-modules)
@@ -376,9 +377,7 @@ if __name__ == "__main__":
 
                 k_w_group = np.abs(np.angle(values[m][0])) / aL
                 # k_w_group = np.arccos(values[m][0].real) / aL
-
                 # print("k_w_group: ", k_w_group)
-                # k_w_group = np.arccos(values[m][0].real) / aL
 
                 try:
                     k_w_group_indice = np.where(np.isclose(k_w_group, k_adapteds))[0].item()
@@ -389,11 +388,7 @@ if __name__ == "__main__":
                 # basis, dims = adapted0, dim0
 
                 group_vectors = vectors[:, m]
-                try:
-                    # tmp = divide_irreps(group_vectors.T, basis, dims).sum(axis=0)
-                    adapted_vecs = divide_over_irreps(group_vectors, basis, dims)
-                except:
-                    set_trace()
+                adapted_vecs = divide_over_irreps(group_vectors, basis, dims)
 
                 # res = check_same_space(group_vectors, adapted_vecs)
                 # print(f"Group {i_m}: {group_vectors.shape[1]} modes")
@@ -408,203 +403,7 @@ if __name__ == "__main__":
                 vectors[:, m] = tmp_vec
             return values, vectors, mask, irreps
 
-
         # # Solve the corresponding eigenvalue equations for the leads.
         # # Look for degenerate modes and orthonormalize them.
         ALadvm, ULadvm, mask_Ladvm, tmp_irreps = orthogonalize(*la.eig(inv_FLadvm), adapteds, k_adapteds, dimensions)
-        ALretp, ULretp, mask_Lretp, _ = orthogonalize(*la.eig(FLretp), adapteds, k_adapteds, dimensions)
-        ARretp, URretp, mask_Rretp, _ = orthogonalize(*la.eig(FRretp), adapteds, k_adapteds, dimensions)
-        ALadvp, ULadvp, mask_Ladvp, _ = orthogonalize(*la.eig(FLadvp), adapteds, k_adapteds, dimensions)
-        ARadvp, URadvp, mask_Radvp, _ = orthogonalize(*la.eig(FRadvp), adapteds, k_adapteds, dimensions)
-
-        ALretm, ULretm, mask_Lretm, _ = orthogonalize(*la.eig(inv_FLretm), adapteds, k_adapteds, dimensions)
-        ARretm, URretm, mask_Rretm, _ = orthogonalize(*la.eig(inv_FRretm), adapteds, k_adapteds, dimensions)
-        ARadvm, URadvm, mask_Radvm, _ = orthogonalize(*la.eig(inv_FRadvm), adapteds, k_adapteds, dimensions)
-
-
-        # Compute the group velocity matrices.
-        # yapf: disable
-        VLretp = 1.j * aL * ULretp.conj().T @ TL @ (
-                la.solve(inv_gLretp, TL.conj().T) -
-                la.solve(inv_gLadvp, TL.conj().T)
-        ) @ ULretp / 2. / omega
-        VRretp = 1.j * aR * URretp.conj().T @ TR @ (
-                la.solve(inv_gRretp, TR.conj().T) -
-                la.solve(inv_gRadvp, TR.conj().T)
-        ) @ URretp / 2. / omega
-        VLadvp = 1.j * aL * ULadvp.conj().T @ TL @ (
-                la.solve(inv_gLadvp, TL.conj().T) -
-                la.solve(inv_gLretp, TL.conj().T)
-        ) @ ULadvp / 2. / omega
-        VRadvp = 1.j * aR * URadvp.conj().T @ TR @ (
-                la.solve(inv_gRadvp, TR.conj().T) -
-                la.solve(inv_gRretp, TR.conj().T)
-        ) @ URadvp / 2. / omega
-        VLretm = -1.j * aL * ULretm.conj().T @ TL.conj().T @ (
-                la.solve(inv_gLretm, TL) -
-                la.solve(inv_gLadvm, TL)
-        ) @ ULretm / 2. / omega
-        VRretm = -1.j * aR * URretm.conj().T @ TR.conj().T @ (
-                la.solve(inv_gRretm, TR) -
-                la.solve(inv_gRadvm, TR)
-        ) @ URretm / 2. / omega
-        VLadvm = -1.j * aL * ULadvm.conj().T @ TL.conj().T @ (
-                la.solve(inv_gLadvm, TL) -
-                la.solve(inv_gLretm, TL)
-        ) @ ULadvm / 2. / omega
-        VRadvm = -1.j * aR * URadvm.conj().T @ TR.conj().T @ (
-                la.solve(inv_gRadvm, TR) -
-                la.solve(inv_gRretm, TR)
-        ) @ URadvm / 2. / omega
-
-
-        # yapf: enable
-        # Refine these matrices using the precomputed propagation masks.
-        def refine(V, mask):
-            diag = np.diag(V)
-            nruter = np.zeros_like(diag)
-            nruter[mask] = diag[mask].real
-            return np.diag(nruter)
-
-
-        VLretp = refine(VLretp, mask_Lretp)
-        VRretp = refine(VRretp, mask_Rretp)
-        VLadvp = refine(VLadvp, mask_Ladvp)
-        VRadvp = refine(VRadvp, mask_Radvp)
-        VLretm = refine(VLretm, mask_Lretm)
-        VRretm = refine(VRretm, mask_Rretm)
-        VLadvm = refine(VLadvm, mask_Ladvm)
-        VRadvm = refine(VRadvm, mask_Radvm)
-
-
-        # Set up auxiliary diagonal matrices with elements that are either
-        # inverse of the previous diagonals or zero.
-        def build_tilde(V):
-            diag = np.diag(V)
-            nruter = np.zeros_like(diag)
-            indices = np.logical_not(np.isclose(np.abs(diag), 0.0))
-            nruter[indices] = 1.0 / diag[indices]
-            return np.diag(nruter)
-
-
-        VLretp_tilde = build_tilde(VLretp)
-        VRretp_tilde = build_tilde(VRretp)
-        VLadvp_tilde = build_tilde(VLadvp)
-        VRadvp_tilde = build_tilde(VRadvp)
-        VLretm_tilde = build_tilde(VLretm)
-        VRretm_tilde = build_tilde(VRretm)
-        VLadvm_tilde = build_tilde(VLadvm)
-        VRadvm_tilde = build_tilde(VRadvm)
-
-        # Build the matrices used to extract the transmission of the
-        # perfect leads.
-        ILretp = VLretp @ VLretp_tilde
-        IRretp = VRretp @ VRretp_tilde
-        ILadvp = VLadvp @ VLadvp_tilde
-        IRadvp = VRadvp @ VRadvp_tilde
-        ILretm = VLretm @ VLretm_tilde
-        IRretm = VRretm @ VRretm_tilde
-        ILadvm = VLadvm @ VLadvm_tilde
-        IRadvm = VRadvm @ VRadvm_tilde
-
-        VRretp12 = np.sqrt(VRretp)
-        VLadvm12 = np.sqrt(VLadvm)
-        VLretm12 = np.sqrt(VLretm)
-        VRadvp12 = np.sqrt(VRadvp)
-
-        tRL = (
-                2.0j
-                * omega
-                * (
-                        VRretp12
-                        @ la.solve(URretp, GRLret)
-                        @ la.solve(ULadvm.conj().T, VLadvm12)
-                        / np.sqrt(aR * aL)
-                )
-        )
-        tLR = (
-                2.0j
-                * omega
-                * (
-                        VLretm12
-                        @ la.solve(ULretm, GLRret)
-                        @ la.solve(URadvp.conj().T, VRadvp12)
-                        / np.sqrt(aR * aL)
-                )
-        )
-
-        #  Discard evanescent modes.
-        tRL = tRL[mask_Rretp, :][:, mask_Ladvm]
-        trans_modes = np.diag(tRL.conj().T @ tRL).real
-        trans_check[iomega] = trans_modes.sum()
-
-        print("---------- -----------")
-        print("omega=", omega)
-
-
-        matrices_prob.append(np.diag(trans_modes))
-        Irreps.append(np.array(tmp_irreps) - 2)
-        for im, tras in enumerate(trans_modes):
-            NLp_irreps[tmp_irreps[im], iomega] += tras
-
-
-    NLp_sum = NLp_irreps.sum(axis=0)
-
-    if True and NPOINTS == 50:
-        fsize = matplotlib.rcParams["font.size"]
-        fig, axs = plt.subplots(5, 10, figsize=(16, 10))
-        # fig, axs = plt.subplots(5, 10, figsize=(18, 12))
-        for i in range(5):
-            for j in range(10):
-                k = 10 * i + j
-                if matrices_prob[k].size > 0:
-                    im = axs[i, j].matshow(matrices_prob[k], vmin=0.0, vmax=1.0)
-                    # axs[i, j].set_xticks(np.arange(len(Irreps[k])), Irreps[k])
-                    # axs[i, j].set_yticks(np.arange(len(Irreps[k])), Irreps[k])
-                    axs[i, j].set_xticks(np.arange(len(Irreps[k])))
-                    axs[i, j].set_xticklabels(Irreps[k])
-                    axs[i, j].set_yticks(np.arange(len(Irreps[k])))
-                    axs[i, j].set_yticklabels(Irreps[k])
-                    axs[i, j].tick_params(axis='x', labelsize=8)
-                    axs[i, j].tick_params(axis='y', labelsize=8)
-                else:
-                    axs[i, j].axis("off")
-                axs[i, j].text(
-                    0.5,
-                    0.5,
-                    r"${0:.2f}$".format(inc_omega[k]),
-                    horizontalalignment="center",
-                    verticalalignment="center",
-                    transform=axs[i, j].transAxes,
-                    fontdict=dict(size=fsize / 1.2, color="red", weight="bold"),
-                )
-    plt.tight_layout()
-    plt.subplots_adjust(hspace=1e-3, wspace=1e-3, right=0.9)
-    cbar_ax = fig.add_axes([0.95, 0.05, 0.02, 0.9])
-    fig.colorbar(im, cax=cbar_ax)
-    plt.savefig(os.path.join(path_directory, "section.png"), dpi=500)
-
-
-    fig, axs = plt.subplots(figsize=(8, 6))
-    plt.plot(np.array(inc_omega), trans_check, label="modes_sum", color="yellow")
-    plt.plot(np.array(inc_omega), trans, label="Caroli", color="grey")
-    plt.plot(np.array(inc_omega), NLp_sum, label="Irreps_sum", color="pink")
-
-    color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'yellow', 'pink']
-    labels = ["|m|=0", "|m|=1", "|m|=2", "|m|=3", "|m|=4", "|m|=5", "|m|=6", "|m|=7", "|m|=8", "|m|=9"]
-
-    NLp_irreps = np.array([NLp_irreps[2], NLp_irreps[1] + NLp_irreps[3], NLp_irreps[0] + NLp_irreps[4], NLp_irreps[5]])
-    for ii, freq in enumerate(NLp_irreps):
-        plt.plot(np.array(inc_omega), freq, label=labels[ii], color=color[ii])
-
-    plt.xlim(left=0.0)
-    plt.ylim(bottom=0.0)
-    plt.legend(loc="best")
-    plt.tight_layout()
-    plt.xlabel("$\omega\;(\mathrm{rad/ps})$", fontsize=12)
-    plt.ylabel(r"$T(\omega)$", fontsize=12)
-
-    plt.savefig(os.path.join(path_directory, "transmission_sym_adapted_defect.png"), dpi=600)
-    plt.show()
-
 
