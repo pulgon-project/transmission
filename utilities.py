@@ -72,8 +72,9 @@ def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrice
     for qp in qpoints:
         characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
         characters = np.array(characters)
-        characters = characters[::2] + characters[1::2]   # depend on the dimension of the character
+        characters = characters[::2] + characters[1::2]   # combine all sigma(1,-1)
 
+        # set_trace()
         # characters = np.round(characters, 6)
         chas.append(characters)
 
@@ -166,6 +167,7 @@ def divide_over_irreps(vecs, basis, dimensions):
         adapted_vecs.append(new_vecs)
     found = sum(v.shape[1] for v in adapted_vecs)
     if found != n_vecs:
+        # set_trace()
         # res = divide_irreps(vecs.T,basis,dimensions)
         raise ValueError(f"{n_vecs} were needed, but {found} were found")
     return adapted_vecs

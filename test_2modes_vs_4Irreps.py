@@ -86,7 +86,7 @@ if __name__ == "__main__":
         "-t3",
         "--means_tol",
         type=float,
-        default=1e-2,
+        default=5e-2,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
              " it a propagating mode",
     )
@@ -137,8 +137,11 @@ if __name__ == "__main__":
     sym = []
     tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
     sym.append(tran.affine_matrix)
-    pg1 = obj.get_generators()
-    sym.append(pg1[0])
+    # pg1 = obj.get_generators()
+    # sym.append(pg1[0])
+    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    sym.append(rots.affine_matrix)
+
     mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
     sym.append(mirror.affine_matrix)
 
@@ -147,13 +150,15 @@ if __name__ == "__main__":
     # num_irreps = 6
     # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     # nrot = obj.get_rotational_symmetry_number()
-    #
     # sym = []
-    # pg1 = obj.get_generators()  # change the order to satisfy the character table
-    # sym.append(pg1[1])
+    # # pg1 = obj.get_generators()  # change the order to satisfy the character table
+    # # sym.append(pg1[1])
+    # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
+    # sym.append(rots.affine_matrix)
+    #########################################
 
 
-    ops, order_ops = brute_force_generate_group_subsquent(sym)
+    ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-6)
     if len(ops) != len(order_ops):
         logging.ERROR("len(ops) != len(order)")
 
@@ -163,8 +168,8 @@ if __name__ == "__main__":
             op[:3, :3], op[:3, 3] * cyclic._pure_trans
         )
         ops_car_sym.append(tmp_sym)
-    matrices = get_matrices(atom_center, ops_car_sym)
 
+    matrices = get_matrices(atom_center, ops_car_sym)
     num_atoms = len(phonon.primitive.numbers)
 
     LR_blocks = np.load(path_LR_blocks)
@@ -225,8 +230,11 @@ if __name__ == "__main__":
 
     NLp_irreps = np.zeros((num_irreps, NPOINTS))  # the number of im
 
-
+    # k_res1, k_res2 = [], []
+    # for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
     omega = 7.656578907447281
+    print("-----------")
+    print("omega = ", omega)
     en = omega * (omega + 1.0j * args.eps)
     # Build the four retarded GFs of leads extending left or right.
     inv_gLretm = decimation.inv_g00(
@@ -295,7 +303,6 @@ if __name__ == "__main__":
     GRLret = Gret[-HR_pr.shape[0]:, : HL_pr.shape[1]]
 
 
-
     ########## Move the calculation of adapted matrix out of "orthogonalize" function   ############
     values, vectors = la.eig(FLretp)
     modules = np.abs(values)
@@ -313,24 +320,22 @@ if __name__ == "__main__":
         if hi >= vectors.shape[1]:
             break
         hi += 1
-
     for g in groups:
         lo, hi = g
         if hi > lo + 1:
             values[lo:hi] = values[lo:hi].mean()
 
     # adapteds, dimensions = get_adapted_matrix_multiq([3.14159265, np.pi], nrot, order_ops, family, aL, num_atoms, matrices)
-
     mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
     irreps = []
     if mask.sum() != 0:  # not all False
         # idx_mask_end = np.where(mask)[0][-1]
         k_w = np.abs(np.angle(values[mask])) / aL
-        # k_w = np.pi * np.arccos(values[mask].real) / aL
+        # k_w = np.arccos(values[mask].real) / aL
+
         k_adapteds = np.unique(k_w)
         adapteds, dimensions = get_adapted_matrix_multiq(k_adapteds, nrot, order_ops, family, aL, num_atoms, matrices)
 
-    # adapted0, dim0 = get_adapted_matrix(0, nrot, order_ops, family, aL, num_atoms, matrices)
     def orthogonalize(values, vectors, adapteds, k_adapteds, dimensions):
         modules = np.abs(values)
         phases = np.angle(values)
@@ -378,16 +383,17 @@ if __name__ == "__main__":
                 set_trace()
                 logging.ERROR("No correspond k indices")
             basis, dims = adapteds[k_w_group_indice], dimensions[k_w_group_indice]
-            # basis, dims = adapted0, dim0
-
             group_vectors = vectors[:, m]
 
-            # res = divide_irreps(group_vectors.T, get_adapted_matrix(0,nrot, order_ops, family, aL, num_atoms, matrices)[0], dims)
+            # res = divide_irreps(group_vectors.T, get_adapted_matrix(0, nrot, order_ops, family, aL, num_atoms, matrices)[0], dims)
             try:
                 adapted_vecs = divide_over_irreps(group_vectors, basis, dims)
             except:
                 res = divide_irreps(group_vectors.T, basis, dims)
+                print("shape of vecs: ", group_vectors.shape[1])
+                print(res)
                 set_trace()
+                continue
 
             # res = check_same_space(group_vectors, adapted_vecs)
             # print(f"Group {i_m}: {group_vectors.shape[1]} modes")
@@ -405,4 +411,3 @@ if __name__ == "__main__":
     # # Solve the corresponding eigenvalue equations for the leads.
     # # Look for degenerate modes and orthonormalize them.
     ALadvm, ULadvm, mask_Ladvm, tmp_irreps = orthogonalize(*la.eig(inv_FLadvm), adapteds, k_adapteds, dimensions)
-

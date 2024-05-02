@@ -304,7 +304,6 @@ if __name__ == "__main__":
             GRLret @ (GRLret @ GammaL.conj().T).conj().T @ GammaR
         ).real
 
-
         values, vectors = la.eig(FLretp)
         modules = np.abs(values)
         order_val = np.argsort(-modules)
