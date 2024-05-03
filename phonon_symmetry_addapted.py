@@ -53,6 +53,7 @@ def main():
     nrot = obj.get_rotational_symmetry_number()
 
     NQS = 51
+    family = 4
     k_start = -np.pi+0.1
     # k_start = 0
     k_end = np.pi-0.1
@@ -95,7 +96,6 @@ def main():
     # set_trace()
     # matrices = get_matrices(atom, ops_car_sym)
 
-    family = 4
     # characters, paras_values, paras_symbols = get_character(qpoints_1dim, nrot, order, family, a=cyclic._pure_trans)
     # characters = np.array(characters)
     # characters = characters[::2] + characters[1::2]

@@ -52,8 +52,10 @@ import logging
 from ase import Atoms
 from utilities import divide_irreps, divide_over_irreps, get_adapted_matrix_multiq, get_adapted_matrix
 
+
 matplotlib.rcParams["font.size"] = 16.0
 NPOINTS = 50
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -63,7 +65,7 @@ if __name__ == "__main__":
         "-e",
         "--eps",
         type=float,
-        default=1e-5,
+        default=1e-6,
         help="prefactor for the imaginary part of the energies",
     )
     parser.add_argument(
@@ -86,7 +88,7 @@ if __name__ == "__main__":
         "-t3",
         "--means_tol",
         type=float,
-        default=5e-2,
+        default=1e-2,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
              " it a propagating mode",
     )
@@ -101,7 +103,7 @@ if __name__ == "__main__":
         "-m",
         "--maxiter",
         type=int,
-        default=100000,
+        default=200000,
         help="maximum number of iterations in the decimation loop",
     )
     # parser.add_argument("phonopy_file", help="phonopy yaml file")
@@ -156,9 +158,8 @@ if __name__ == "__main__":
     # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
     # sym.append(rots.affine_matrix)
     #########################################
-
-
     ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-6)
+
     if len(ops) != len(order_ops):
         logging.ERROR("len(ops) != len(order)")
 
@@ -209,12 +210,17 @@ if __name__ == "__main__":
     HR = HL.copy()
     TR = TL.copy()
 
-    aL = phonon.primitive.cell[2, 2]
+    # aL = phonon.primitive.cell[2, 2]
+    aL = cyclic._pure_trans
     aR = aL
+
+    k_start = -np.pi+0.1
+    # k_start = 0
+    k_end = np.pi-0.1
 
     # Plot the phonon spectra of both bulk leads.
     # qvec = np.linspace(0.0, 2.0 * np.pi, num=1001)
-    qvec = np.linspace(-np.pi, np.pi, num=NPOINTS*10)
+    qvec = np.linspace(k_start, k_end, num=NPOINTS*10)
     omegaL, vgL = decimation.q2omega(HL, TL, qvec)
     # Compute all the parameters of the interface
     inc_omega = np.linspace(1e-1, omegaL.max() * 1.01, num=NPOINTS, endpoint=True)
@@ -230,9 +236,11 @@ if __name__ == "__main__":
 
     NLp_irreps = np.zeros((num_irreps, NPOINTS))  # the number of im
 
+
     # k_res1, k_res2 = [], []
     # for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
-    omega = 7.656578907447281
+    # omega = 7.656578907447281
+    omega = 17.102302541756387
     print("-----------")
     print("omega = ", omega)
     en = omega * (omega + 1.0j * args.eps)
@@ -304,16 +312,20 @@ if __name__ == "__main__":
 
 
     ########## Move the calculation of adapted matrix out of "orthogonalize" function   ############
-    values, vectors = la.eig(FLretp)
+    values, vectors = la.eig(inv_FLadvm)
     modules = np.abs(values)
     order_val = np.argsort(-modules)
     values = values[order_val]
+    mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+    # order_ang = np.argsort(-np.angle(values[mask]))
+    # values[mask] = values[mask][order_ang]
+
     lo = 0
     hi = 1
     groups = []
     while True:
         if hi >= vectors.shape[1] or not np.isclose(
-                values[hi], values[hi - 1], rtol=args.rtol, atol=args.atol,
+                np.angle(values[hi]), np.angle(values[hi - 1]), rtol=args.rtol, atol=args.atol,
         ):
             groups.append((lo, hi))
             lo = hi
@@ -325,29 +337,33 @@ if __name__ == "__main__":
         if hi > lo + 1:
             values[lo:hi] = values[lo:hi].mean()
 
-    # adapteds, dimensions = get_adapted_matrix_multiq([3.14159265, np.pi], nrot, order_ops, family, aL, num_atoms, matrices)
-    mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
     irreps = []
     if mask.sum() != 0:  # not all False
-        # idx_mask_end = np.where(mask)[0][-1]
-        k_w = np.abs(np.angle(values[mask])) / aL
-        # k_w = np.arccos(values[mask].real) / aL
-
+        # k_w = np.abs(np.angle(values[mask])) / aL
+        k_w = np.arccos(values[mask].real) / aL
         k_adapteds = np.unique(k_w)
         adapteds, dimensions = get_adapted_matrix_multiq(k_adapteds, nrot, order_ops, family, aL, num_atoms, matrices)
 
+    # k_test = np.linspace(0, (np.pi-0.1)/aL, 50, endpoint=True)
+    # adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, nrot, order_ops, family, aL, num_atoms, matrices)
+
     def orthogonalize(values, vectors, adapteds, k_adapteds, dimensions):
         modules = np.abs(values)
-        phases = np.angle(values)
-        order = np.argsort(-modules)
-        values = np.copy(values[order])
-        vectors = np.copy(vectors[:, order])
+        order_val = np.argsort(-modules)
+        values = values[order_val]
+        vectors = np.copy(vectors[:, order_val])
+
+        # mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+        # order_ang = np.argsort(-np.angle(values[mask]))
+        # values[mask] = values[mask][order_ang]
+        # vectors[:, mask] = np.copy(vectors[:, mask][:, order_ang])
+
         lo = 0
         hi = 1
         groups = []
         while True:
             if hi >= vectors.shape[1] or not np.isclose(
-                    values[hi], values[hi - 1], rtol=args.rtol, atol=args.atol,
+                    np.angle(values[hi]), np.angle(values[hi - 1]), rtol=args.rtol, atol=args.atol,
             ):
                 groups.append((lo, hi))
                 lo = hi
@@ -373,10 +389,9 @@ if __name__ == "__main__":
             if degeneracy == 0:
                 continue
 
-            k_w_group = np.abs(np.angle(values[m][0])) / aL
-            # k_w_group = np.pi * np.arccos(values[m].real)[0] / aL
+            # k_w_group = np.abs(np.angle(values[m][0])) / aL
+            k_w_group = np.arccos(values[m].real)[0] / aL
             # print("k_w_group: ", k_w_group)
-
             try:
                 k_w_group_indice = np.where(np.isclose(k_w_group, k_adapteds))[0].item()
             except:
@@ -385,12 +400,11 @@ if __name__ == "__main__":
             basis, dims = adapteds[k_w_group_indice], dimensions[k_w_group_indice]
             group_vectors = vectors[:, m]
 
-            # res = divide_irreps(group_vectors.T, get_adapted_matrix(0, nrot, order_ops, family, aL, num_atoms, matrices)[0], dims)
             try:
                 adapted_vecs = divide_over_irreps(group_vectors, basis, dims)
-            except:
-                res = divide_irreps(group_vectors.T, basis, dims)
-                print("shape of vecs: ", group_vectors.shape[1])
+            except Exception as e:
+                print(e)
+                res = divide_irreps(group_vectors.T,basis,dims)
                 print(res)
                 set_trace()
                 continue

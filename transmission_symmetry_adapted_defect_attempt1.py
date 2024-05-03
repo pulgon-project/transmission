@@ -78,7 +78,7 @@ if __name__ == "__main__":
         "-t2",
         "--atol",
         type=float,
-        default=1e-2,
+        default=5e-2,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
              " it a propagating mode",
     )
@@ -231,7 +231,10 @@ if __name__ == "__main__":
 
     NLp_irreps = np.zeros((num_irreps, NPOINTS))  # the number of im
     for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
-        omega = 7.656578907447281
+        # omega = 7.656578907447281
+
+        print("---------- -----------")
+        print("omega=", omega)
 
         en = omega * (omega + 1.0j * args.eps)
         # Build the four retarded GFs of leads extending left or right.
@@ -330,8 +333,8 @@ if __name__ == "__main__":
         irreps = []
         if mask.sum() != 0:  # not all False
             # idx_mask_end = np.where(mask)[0][-1]
-            k_w = np.abs(np.angle(values[mask])) / aL
-            # k_w = np.arccos(values[mask].real) / aL
+            # k_w = np.abs(np.angle(values[mask])) / aL
+            k_w = np.arccos(values[mask].real) / aL
             k_adapteds = np.unique(k_w)
             adapteds, dimensions = get_adapted_matrix_multiq(k_adapteds, nrot, order_ops, family, aL, num_atoms, matrices)
 
@@ -373,8 +376,8 @@ if __name__ == "__main__":
                 if degeneracy == 0:
                     continue
 
-                k_w_group = np.abs(np.angle(values[m][0])) / aL
-                # k_w_group = np.arccos(values[m][0].real) / aL
+                # k_w_group = np.abs(np.angle(values[m][0])) / aL
+                k_w_group = np.arccos(values[m][0].real) / aL
 
                 # print("k_w_group: ", k_w_group)
                 # k_w_group = np.arccos(values[m][0].real) / aL
@@ -392,6 +395,7 @@ if __name__ == "__main__":
                     # tmp = divide_irreps(group_vectors.T, basis, dims).sum(axis=0)
                     adapted_vecs = divide_over_irreps(group_vectors, basis, dims)
                 except:
+                    res = divide_irreps(group_vectors.T, basis, dims)
                     set_trace()
 
                 # res = check_same_space(group_vectors, adapted_vecs)
@@ -537,8 +541,6 @@ if __name__ == "__main__":
         trans_modes = np.diag(tRL.conj().T @ tRL).real
         trans_check[iomega] = trans_modes.sum()
 
-        print("---------- -----------")
-        print("omega=", omega)
 
 
         matrices_prob.append(np.diag(trans_modes))

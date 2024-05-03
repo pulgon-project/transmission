@@ -158,7 +158,8 @@ def divide_over_irreps(vecs, basis, dimensions):
     for b in irrep_bases:
         combined_matrix = np.concatenate([vecs, -b], axis=1)
         # TODO: Handle the tolerance more sensibly and systematically.
-        kernel = la.null_space(combined_matrix, rcond=1e-1)
+        kernel = la.null_space(combined_matrix, rcond=5e-1)
+        # set_trace()
         n_solutions = kernel.shape[1]
         coefficients = kernel[:n_vecs, :]
         new_vecs = vecs @ coefficients
@@ -167,7 +168,6 @@ def divide_over_irreps(vecs, basis, dimensions):
         adapted_vecs.append(new_vecs)
     found = sum(v.shape[1] for v in adapted_vecs)
     if found != n_vecs:
-        # set_trace()
         # res = divide_irreps(vecs.T,basis,dimensions)
         raise ValueError(f"{n_vecs} were needed, but {found} were found")
     return adapted_vecs
