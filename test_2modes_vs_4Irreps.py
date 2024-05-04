@@ -121,33 +121,32 @@ if __name__ == "__main__":
     path_defect_indices = os.path.join(path_directory, "defect_indices.npz")
     path_poscar = os.path.join(path_directory, "POSCAR")
 
-    ######################### projector
+    ######################### projector #######################
     phonon = phonopy.load(phonopy_yaml=path_phonopy_pure, is_compact_fc=True)
-
     poscar_phonopy = phonon.primitive
     poscar_ase = Atoms(cell=poscar_phonopy.cell, positions=poscar_phonopy.positions, numbers=poscar_phonopy.numbers)
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
     atom = cyclic._primitive
     atom_center = find_axis_center_of_nanotube(atom)
 
-    ########### family 4 ###############
+    ################ family 4 ##################
     family = 4
     num_irreps = 12
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     nrot = obj.get_rotational_symmetry_number()
 
-    sym = []
+    sym  = []
     tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    sym.append(tran.affine_matrix)
     # pg1 = obj.get_generators()
     # sym.append(pg1[0])
     rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    sym.append(rots.affine_matrix)
-
     mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    mirror1 = SymmOp.reflection([0,0,1], [0,0,0])
+    sym.append(tran.affine_matrix)
+    sym.append(rots.affine_matrix)
     sym.append(mirror.affine_matrix)
 
-    ########### family 2 #############
+    ################### family 2 #############
     # family = 2
     # num_irreps = 6
     # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
@@ -159,6 +158,7 @@ if __name__ == "__main__":
     # sym.append(rots.affine_matrix)
     #########################################
     ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-6)
+
 
     if len(ops) != len(order_ops):
         logging.ERROR("len(ops) != len(order)")
@@ -236,7 +236,6 @@ if __name__ == "__main__":
 
     NLp_irreps = np.zeros((num_irreps, NPOINTS))  # the number of im
 
-
     # k_res1, k_res2 = [], []
     # for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
     # omega = 7.656578907447281
@@ -313,9 +312,10 @@ if __name__ == "__main__":
 
     ########## Move the calculation of adapted matrix out of "orthogonalize" function   ############
     values, vectors = la.eig(inv_FLadvm)
-    modules = np.abs(values)
-    order_val = np.argsort(-modules)
+    mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+    order_val = np.lexsort((np.angle(values), 1 * (~mask)))
     values = values[order_val]
+    vectors = vectors[:, order_val]
     mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
     # order_ang = np.argsort(-np.angle(values[mask]))
     # values[mask] = values[mask][order_ang]
@@ -348,10 +348,11 @@ if __name__ == "__main__":
     # adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, nrot, order_ops, family, aL, num_atoms, matrices)
 
     def orthogonalize(values, vectors, adapteds, k_adapteds, dimensions):
-        modules = np.abs(values)
-        order_val = np.argsort(-modules)
+        mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+        order_val = np.lexsort((np.angle(values), 1 * (~mask)))
         values = values[order_val]
-        vectors = np.copy(vectors[:, order_val])
+        vectors = vectors[:, order_val]
+        mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
 
         # mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
         # order_ang = np.argsort(-np.angle(values[mask]))
@@ -376,12 +377,12 @@ if __name__ == "__main__":
                 values[lo:hi] = values[lo:hi].mean()
                 vectors[:,lo:hi] = la.orth(vectors[:,lo:hi])
 
-        mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
-        indices = np.arange(len(mask))
+        # mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+        index = np.arange(len(mask))
         group_masks = []
         for g in groups:
             lo, hi = g
-            group_masks.append(mask & (indices >= lo) & (indices < hi))
+            group_masks.append(mask & (index >= lo) & (index < hi))
 
         irreps = []
         for i_m, m in enumerate(group_masks):
@@ -396,7 +397,7 @@ if __name__ == "__main__":
                 k_w_group_indice = np.where(np.isclose(k_w_group, k_adapteds))[0].item()
             except:
                 set_trace()
-                logging.ERROR("No correspond k indices")
+                logging.ERROR("No correspond k index")
             basis, dims = adapteds[k_w_group_indice], dimensions[k_w_group_indice]
             group_vectors = vectors[:, m]
 

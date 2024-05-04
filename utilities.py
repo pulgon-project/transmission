@@ -49,19 +49,15 @@ def get_adapted_matrix(qp, nrot, order, family, a, num_atom, matrices):
         for kk in range(len(chara)):  # loop ops
             # projector += prefactor * chara[kk] * matrices[kk]
             projector += chara[kk] * matrices[kk]
-
-        basis = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+        basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+        # print("qp:", qp)
+        # print("error", error)
+        
         adapted.append(basis)
-
         remaining_dof -= basis.shape[1]
         dimension.append(basis.shape[1])
     adapted = np.concatenate(adapted, axis=1)
 
-    if adapted.shape[0] != adapted.shape[1]:
-        print(ii, adapted.shape)
-        print(dimension)
-        set_trace()
-        logging.ERROR("the shape of adapted not equal")
     return adapted, dimension
 
 
@@ -72,37 +68,40 @@ def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrice
     for qp in qpoints:
         characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
         characters = np.array(characters)
-        characters = characters[::2] + characters[1::2]   # combine all sigma(1,-1)
 
-        # set_trace()
-        # characters = np.round(characters, 6)
+        characters = characters[::2] + characters[1::2]   # combine all sigma(1,-1)
+        # characters = characters[::2]   # combine all sigma(1,-1)
+        paras_values = paras_values[::2]
         chas.append(characters)
 
         ndof = 3 * num_atom
         remaining_dof = copy.deepcopy(ndof)
         adapted = []
         dimension = []
+
         for ii, chara in enumerate(characters):  # loop quantum number
             projector = np.zeros((ndof, ndof), dtype=np.complex128)
             # prefactor = chara[0].real / len(chara)
             for kk in range(len(chara)):  # loop ops
                 # projector += prefactor * chara[kk] * matrices[kk]
                 projector += chara[kk] * matrices[kk]
-
-            basis = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+            basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
             adapted.append(basis)
 
             remaining_dof -= basis.shape[1]
             dimension.append(basis.shape[1])
+
         adapted = np.concatenate(adapted, axis=1)
         adapteds.append(adapted)
         dimensions.append(dimension)
 
-        if adapted.shape[0] != adapted.shape[1]:
-            print(ii, adapted.shape)
-            print(dimension)
-            set_trace()
-            logging.ERROR("the shape of adapted not equal")
+        print("qp:", qp)
+        print("error:", error)
+        val, vec = la.eig(projector)
+        val = np.abs(val)
+        val = val[np.argsort(-val)]
+        print("val: ", val[:10])
+        vec = vec[:, np.argsort(-val)]
     return adapteds, dimensions
 
 
@@ -158,7 +157,7 @@ def divide_over_irreps(vecs, basis, dimensions):
     for b in irrep_bases:
         combined_matrix = np.concatenate([vecs, -b], axis=1)
         # TODO: Handle the tolerance more sensibly and systematically.
-        kernel = la.null_space(combined_matrix, rcond=5e-1)
+        kernel = la.null_space(combined_matrix, rcond=1e-1)
         # set_trace()
         n_solutions = kernel.shape[1]
         coefficients = kernel[:n_vecs, :]

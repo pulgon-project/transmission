@@ -75,7 +75,7 @@ def main():
     rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
     sym.append(rot.affine_matrix)
     mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    sym.append(mirror.affine_matrix)
+    # sym.append(mirror.affine_matrix)
 
     # sym.append(affine_matrix_op(pg1[0], pg1[1]))
     # sym.append(SymmOp.from_rotation_and_translation(Cn(6), [0,0,0]).affine_matrix)

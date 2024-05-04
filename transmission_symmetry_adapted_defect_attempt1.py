@@ -53,7 +53,7 @@ from ase import Atoms
 from utilities import counting_y_from_xy, get_adapted_matrix, divide_irreps, divide_over_irreps, get_adapted_matrix_multiq
 
 matplotlib.rcParams["font.size"] = 16.0
-NPOINTS = 50
+NPOINTS = 101
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -134,8 +134,7 @@ if __name__ == "__main__":
     # k_end = np.pi - 0.1
     # path = [[[0, 0, k_start / 2 / np.pi], [0, 0, k_end / 2 / np.pi]]]
     # qpoints, connections = get_band_qpoints_and_path_connections(
-    #     path, npoints=NPOINTS
-    # )
+    #     path, npoints=NPOINTS )
     # qpoints = qpoints[0]
     # qpoints_1dim = np.linspace(k_start/ 2 / np.pi, k_end/ 2 / np.pi, num=NPOINTS, endpoint=k_end)
     # qpoints_1dim = np.linspace(k_start, k_end, num=NPOINTS, endpoint=k_end)
@@ -232,7 +231,6 @@ if __name__ == "__main__":
     NLp_irreps = np.zeros((num_irreps, NPOINTS))  # the number of im
     for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
         # omega = 7.656578907447281
-
         print("---------- -----------")
         print("omega=", omega)
 
@@ -345,6 +343,7 @@ if __name__ == "__main__":
             order = np.argsort(-modules)
             values = np.copy(values[order])
             vectors = np.copy(vectors[:, order])
+
             lo = 0
             hi = 1
             groups = []
