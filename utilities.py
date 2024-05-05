@@ -95,12 +95,12 @@ def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrice
         adapteds.append(adapted)
         dimensions.append(dimension)
 
-        print("qp:", qp)
+        print("qpoint:", qp)
         print("error:", error)
         val, vec = la.eig(projector)
         val = np.abs(val)
         val = val[np.argsort(-val)]
-        print("val: ", val[:(int(ndof / len(characters)) + 1)])
+        print("singular values: ", val[:(int(ndof / len(characters)) + 1)])
         vec = vec[:, np.argsort(-val)]
     return adapteds, dimensions
 
