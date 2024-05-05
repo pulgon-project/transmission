@@ -130,35 +130,32 @@ if __name__ == "__main__":
     atom_center = find_axis_center_of_nanotube(atom)
 
     ################ family 4 ##################
-    family = 4
-    num_irreps = 12
+    #family = 4
+    #num_irreps = 12
+    #obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    #nrot = obj.get_rotational_symmetry_number()
+    #sym  = []
+    #tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    ## pg1 = obj.get_generators()
+    ## sym.append(pg1[0])
+    #rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    #mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    #mirror1 = SymmOp.reflection([0,0,1], [0,0,0])
+    #sym.append(tran.affine_matrix)
+    #sym.append(rots.affine_matrix)
+    #sym.append(mirror.affine_matrix)
+    ################### family 2 #############
+    family = 2
+    num_irreps = 6
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     nrot = obj.get_rotational_symmetry_number()
-
-    sym  = []
-    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    # pg1 = obj.get_generators()
-    # sym.append(pg1[0])
-    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    mirror1 = SymmOp.reflection([0,0,1], [0,0,0])
-    sym.append(tran.affine_matrix)
+    sym = []
+    # pg1 = obj.get_generators()  # change the order to satisfy the character table
+    # sym.append(pg1[1])
+    rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
     sym.append(rots.affine_matrix)
-    sym.append(mirror.affine_matrix)
-
-    ################### family 2 #############
-    # family = 2
-    # num_irreps = 6
-    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    # nrot = obj.get_rotational_symmetry_number()
-    # sym = []
-    # # pg1 = obj.get_generators()  # change the order to satisfy the character table
-    # # sym.append(pg1[1])
-    # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
-    # sym.append(rots.affine_matrix)
     #########################################
     ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-6)
-
 
     if len(ops) != len(order_ops):
         logging.ERROR("len(ops) != len(order)")
