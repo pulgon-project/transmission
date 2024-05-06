@@ -81,10 +81,10 @@ def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrice
 
         for ii, chara in enumerate(characters):  # loop quantum number
             projector = np.zeros((ndof, ndof), dtype=np.complex128)
-            # prefactor = chara[0].real / len(chara)
+            prefactor = chara[0].real / len(chara)
             for kk in range(len(chara)):  # loop ops
-                # projector += prefactor * chara[kk] * matrices[kk]
-                projector += chara[kk] * matrices[kk]
+                projector += prefactor * chara[kk] * matrices[kk]
+                # projector += chara[kk] * matrices[kk]
             basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
             adapted.append(basis)
 
@@ -96,12 +96,13 @@ def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrice
         dimensions.append(dimension)
 
         print("qpoint:", qp)
-        print("error:", error)
-        val, vec = la.eig(projector)
-        val = np.abs(val)
-        val = val[np.argsort(-val)]
-        print("singular values: ", val[:(int(ndof / len(characters)) + 1)])
-        vec = vec[:, np.argsort(-val)]
+        # print("error:", error)
+        _, s, _ = la.svd(projector)
+        # val = np.abs(val)
+        # val = val[np.argsort(-val)]
+        print("singular values: ", s[:(int(ndof / len(characters)) + 1)])
+        # set_trace()
+
     return adapteds, dimensions
 
 

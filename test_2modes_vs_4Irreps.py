@@ -130,32 +130,33 @@ if __name__ == "__main__":
     atom_center = find_axis_center_of_nanotube(atom)
 
     ################ family 4 ##################
-    #family = 4
-    #num_irreps = 12
-    #obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    #nrot = obj.get_rotational_symmetry_number()
-    #sym  = []
-    #tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    ## pg1 = obj.get_generators()
-    ## sym.append(pg1[0])
-    #rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    #mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    #mirror1 = SymmOp.reflection([0,0,1], [0,0,0])
-    #sym.append(tran.affine_matrix)
-    #sym.append(rots.affine_matrix)
-    #sym.append(mirror.affine_matrix)
-    ################### family 2 #############
-    family = 2
-    num_irreps = 6
+    family = 4
+    num_irreps = 12
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     nrot = obj.get_rotational_symmetry_number()
-    sym = []
-    # pg1 = obj.get_generators()  # change the order to satisfy the character table
-    # sym.append(pg1[1])
-    rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
+    sym  = []
+    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    # pg1 = obj.get_generators()
+    # sym.append(pg1[0])
+    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    sym.append(tran.affine_matrix)
     sym.append(rots.affine_matrix)
+    sym.append(mirror.affine_matrix)
+    ################### family 2 #############
+    # family = 2
+    # num_irreps = 6
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.get_rotational_symmetry_number()
+    # sym = []
+    # # pg1 = obj.get_generators()  # change the order to satisfy the character table
+    # # sym.append(pg1[1])
+    # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
+    # sym.append(rots.affine_matrix)
     #########################################
     ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-6)
+
+    # set_trace()
 
     if len(ops) != len(order_ops):
         logging.ERROR("len(ops) != len(order)")
@@ -306,7 +307,6 @@ if __name__ == "__main__":
     GLRret = Gret[: HL_pr.shape[0], -HR_pr.shape[1]:]
     GRLret = Gret[-HR_pr.shape[0]:, : HL_pr.shape[1]]
 
-
     ########## Move the calculation of adapted matrix out of "orthogonalize" function   ############
     values, vectors = la.eig(inv_FLadvm)
     mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
@@ -314,8 +314,6 @@ if __name__ == "__main__":
     values = values[order_val]
     vectors = vectors[:, order_val]
     mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
-    # order_ang = np.argsort(-np.angle(values[mask]))
-    # values[mask] = values[mask][order_ang]
 
     lo = 0
     hi = 1
@@ -334,6 +332,11 @@ if __name__ == "__main__":
         if hi > lo + 1:
             values[lo:hi] = values[lo:hi].mean()
 
+    k_test = np.linspace(0, (np.pi-0.1)/aL, 10, endpoint=True)
+    adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, nrot, order_ops, family, aL, num_atoms, matrices)
+    set_trace()
+
+
     irreps = []
     if mask.sum() != 0:  # not all False
         # k_w = np.abs(np.angle(values[mask])) / aL
@@ -341,8 +344,6 @@ if __name__ == "__main__":
         k_adapteds = np.unique(k_w)
         adapteds, dimensions = get_adapted_matrix_multiq(k_adapteds, nrot, order_ops, family, aL, num_atoms, matrices)
 
-    # k_test = np.linspace(0, (np.pi-0.1)/aL, 50, endpoint=True)
-    # adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, nrot, order_ops, family, aL, num_atoms, matrices)
 
     def orthogonalize(values, vectors, adapteds, k_adapteds, dimensions):
         mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
@@ -350,11 +351,6 @@ if __name__ == "__main__":
         values = values[order_val]
         vectors = vectors[:, order_val]
         mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
-
-        # mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
-        # order_ang = np.argsort(-np.angle(values[mask]))
-        # values[mask] = values[mask][order_ang]
-        # vectors[:, mask] = np.copy(vectors[:, mask][:, order_ang])
 
         lo = 0
         hi = 1
