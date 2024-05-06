@@ -54,8 +54,8 @@ from ase import Atoms
 from utilities import divide_irreps, divide_over_irreps, get_adapted_matrix_multiq, get_adapted_matrix
 
 
-path_atom = "datas/WS2/6-6-u1-3-defect-1/POSCAR"
-# path_atom = "datas/WS2/6-6-u1-3-defect-1/POSCAR-1x1x3"
+# path_atom = "datas/WS2/6-6-u1-3-defect-1/POSCAR"
+path_atom = "datas/WS2/6-6-u1-3-defect-1/POSCAR-1x1x3"
 
 poscar_ase = read(path_atom)
 cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
@@ -64,7 +64,7 @@ atom = cyclic._primitive
 # atom_center = find_axis_center_of_nanotube(poscar_ase)
 atom_center = poscar_ase
 
-write_vasp("test_poscar.vasp", atom_center)
+# write_vasp("test_poscar.vasp", atom_center)
 aL = atom_center.cell[2,2]
 
 ################ family 4 ##################
@@ -96,10 +96,6 @@ sym.append(mirror.affine_matrix)
 # sym.append(rots.affine_matrix)
 #########################################
 ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-6)
-# set_trace()
-
-if len(ops) != len(order_ops):
-    logging.ERROR("len(ops) != len(order)")
 
 ops_car_sym = []
 for op in ops:

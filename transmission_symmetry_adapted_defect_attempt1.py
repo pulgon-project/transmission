@@ -127,36 +127,31 @@ if __name__ == "__main__":
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
     atom = cyclic._primitive
     atom_center = find_axis_center_of_nanotube(atom)
-    family = 4
-    num_irreps = 12
 
-    # k_start = -np.pi + 0.1
-    # k_end = np.pi - 0.1
-    # path = [[[0, 0, k_start / 2 / np.pi], [0, 0, k_end / 2 / np.pi]]]
-    # qpoints, connections = get_band_qpoints_and_path_connections(
-    #     path, npoints=NPOINTS )
-    # qpoints = qpoints[0]
-    # qpoints_1dim = np.linspace(k_start/ 2 / np.pi, k_end/ 2 / np.pi, num=NPOINTS, endpoint=k_end)
-    # qpoints_1dim = np.linspace(k_start, k_end, num=NPOINTS, endpoint=k_end)
-    # qpoints_1dim = qpoints_1dim / cyclic._pure_trans
 
-    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    nrot = obj.get_rotational_symmetry_number()
-
-    sym = []
-    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    sym.append(tran.affine_matrix)
-    pg1 = obj.get_generators()    # change the order to satisfy the character table
-    # for pg in pg1:
-    #     tmp = SymmOp(pg)
-    #     sym.append(tmp.affine_matrix)       # Note: sym here must satisfy with the order of the line group book
-    sym.append(pg1[0])
-    # sym.append(pg1[1])
-    # set_trace()
+    ################### family 4 #############
+    # family = 4
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.get_rotational_symmetry_number()
+    # num_irreps = nrot * 2
+    # sym = []
+    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    # sym.append(tran.affine_matrix)
     # rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
     # sym.append(rot.affine_matrix)
-    mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    sym.append(mirror.affine_matrix)
+    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    # sym.append(mirror.affine_matrix)
+    ################### family 2 #############
+    family = 2
+    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    nrot = obj.get_rotational_symmetry_number()
+    num_irreps = nrot * 2
+    sym = []
+    # pg1 = obj.get_generators()  # change the order to satisfy the character table
+    # sym.append(pg1[1])
+    rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
+    sym.append(rots.affine_matrix)
+    #########################################
 
     ops, order_ops = brute_force_generate_group_subsquent(sym)
     if len(ops) != len(order_ops):
@@ -305,10 +300,12 @@ if __name__ == "__main__":
             GRLret @ (GRLret @ GammaL.conj().T).conj().T @ GammaR
         ).real
 
-        values, vectors = la.eig(FLretp)
-        modules = np.abs(values)
-        order_val = np.argsort(-modules)
+        values, vectors = la.eig(inv_FLadvm)
+        mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+        order_val = np.lexsort((np.angle(values), 1 * (~mask)))
         values = values[order_val]
+        vectors = vectors[:, order_val]
+        mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
         lo = 0
         hi = 1
         groups = []
@@ -327,7 +324,7 @@ if __name__ == "__main__":
             if hi > lo + 1:
                 values[lo:hi] = values[lo:hi].mean()
 
-        mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+        # mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
         irreps = []
         if mask.sum() != 0:  # not all False
             # idx_mask_end = np.where(mask)[0][-1]
@@ -338,11 +335,11 @@ if __name__ == "__main__":
 
         # adapted0, dim0 = get_adapted_matrix(0, nrot, order_ops, family, aL, num_atoms, matrices)
         def orthogonalize(values, vectors, adapteds, k_adapteds, dimensions):
-            modules = np.abs(values)
-            phases = np.angle(values)
-            order = np.argsort(-modules)
-            values = np.copy(values[order])
-            vectors = np.copy(vectors[:, order])
+            mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+            order_val = np.lexsort((np.angle(values), 1 * (~mask)))
+            values = values[order_val]
+            vectors = vectors[:, order_val]
+            mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
 
             lo = 0
             hi = 1
@@ -362,7 +359,7 @@ if __name__ == "__main__":
                     values[lo:hi] = values[lo:hi].mean()
                     vectors[:,lo:hi] = la.orth(vectors[:,lo:hi])
 
-            mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
+            # mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
             indices = np.arange(len(mask))
             group_masks = []
             for g in groups:
@@ -550,39 +547,39 @@ if __name__ == "__main__":
 
     NLp_sum = NLp_irreps.sum(axis=0)
 
-    if True and NPOINTS == 50:
-        fsize = matplotlib.rcParams["font.size"]
-        fig, axs = plt.subplots(5, 10, figsize=(16, 10))
-        # fig, axs = plt.subplots(5, 10, figsize=(18, 12))
-        for i in range(5):
-            for j in range(10):
-                k = 10 * i + j
-                if matrices_prob[k].size > 0:
-                    im = axs[i, j].matshow(matrices_prob[k], vmin=0.0, vmax=1.0)
-                    # axs[i, j].set_xticks(np.arange(len(Irreps[k])), Irreps[k])
-                    # axs[i, j].set_yticks(np.arange(len(Irreps[k])), Irreps[k])
-                    axs[i, j].set_xticks(np.arange(len(Irreps[k])))
-                    axs[i, j].set_xticklabels(Irreps[k])
-                    axs[i, j].set_yticks(np.arange(len(Irreps[k])))
-                    axs[i, j].set_yticklabels(Irreps[k])
-                    axs[i, j].tick_params(axis='x', labelsize=8)
-                    axs[i, j].tick_params(axis='y', labelsize=8)
-                else:
-                    axs[i, j].axis("off")
-                axs[i, j].text(
-                    0.5,
-                    0.5,
-                    r"${0:.2f}$".format(inc_omega[k]),
-                    horizontalalignment="center",
-                    verticalalignment="center",
-                    transform=axs[i, j].transAxes,
-                    fontdict=dict(size=fsize / 1.2, color="red", weight="bold"),
-                )
-    plt.tight_layout()
-    plt.subplots_adjust(hspace=1e-3, wspace=1e-3, right=0.9)
-    cbar_ax = fig.add_axes([0.95, 0.05, 0.02, 0.9])
-    fig.colorbar(im, cax=cbar_ax)
-    plt.savefig(os.path.join(path_directory, "section.png"), dpi=500)
+    # if True and NPOINTS == 50:
+    #     fsize = matplotlib.rcParams["font.size"]
+    #     fig, axs = plt.subplots(5, 10, figsize=(16, 10))
+    #     # fig, axs = plt.subplots(5, 10, figsize=(18, 12))
+    #     for i in range(5):
+    #         for j in range(10):
+    #             k = 10 * i + j
+    #             if matrices_prob[k].size > 0:
+    #                 im = axs[i, j].matshow(matrices_prob[k], vmin=0.0, vmax=1.0)
+    #                 # axs[i, j].set_xticks(np.arange(len(Irreps[k])), Irreps[k])
+    #                 # axs[i, j].set_yticks(np.arange(len(Irreps[k])), Irreps[k])
+    #                 axs[i, j].set_xticks(np.arange(len(Irreps[k])))
+    #                 axs[i, j].set_xticklabels(Irreps[k])
+    #                 axs[i, j].set_yticks(np.arange(len(Irreps[k])))
+    #                 axs[i, j].set_yticklabels(Irreps[k])
+    #                 axs[i, j].tick_params(axis='x', labelsize=8)
+    #                 axs[i, j].tick_params(axis='y', labelsize=8)
+    #             else:
+    #                 axs[i, j].axis("off")
+    #             axs[i, j].text(
+    #                 0.5,
+    #                 0.5,
+    #                 r"${0:.2f}$".format(inc_omega[k]),
+    #                 horizontalalignment="center",
+    #                 verticalalignment="center",
+    #                 transform=axs[i, j].transAxes,
+    #                 fontdict=dict(size=fsize / 1.2, color="red", weight="bold"),
+    #             )
+    # plt.tight_layout()
+    # plt.subplots_adjust(hspace=1e-3, wspace=1e-3, right=0.9)
+    # cbar_ax = fig.add_axes([0.95, 0.05, 0.02, 0.9])
+    # fig.colorbar(im, cax=cbar_ax)
+    # plt.savefig(os.path.join(path_directory, "section.png"), dpi=500)
 
 
     fig, axs = plt.subplots(figsize=(8, 6))
