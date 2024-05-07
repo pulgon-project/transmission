@@ -112,7 +112,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # path_directory = args.data_directory
-    path_directory0 = ["datas/WS2/6-6-u1-3-defect-3-TripleSym/", "datas/WS2/6-6-u1-3-defect-3-nonTripleSym/"]
+    path_directory0 = ["data/WS2/6-6-u1-3-defect-3-TripleSym/", "data/WS2/6-6-u1-3-defect-3-nonTripleSym/"]
     for i_line, path_directory in enumerate(path_directory0):
 
         path_phonopy_defect = os.path.join(path_directory, "phonopy_defect.yaml")

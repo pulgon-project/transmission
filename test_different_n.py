@@ -54,8 +54,8 @@ from ase import Atoms
 from utilities import divide_irreps, divide_over_irreps, get_adapted_matrix_multiq, get_adapted_matrix
 
 
-# path_atom = "datas/WS2/6-6-u1-3-defect-1/POSCAR"
-path_atom = "datas/WS2/6-6-u1-3-defect-1/POSCAR-1x1x3"
+path_atom = "datas/WS2/6-6-u1-3-defect-1/POSCAR"
+# path_atom = "datas/WS2/6-6-u1-3-defect-1/POSCAR-1x1x3"
 
 poscar_ase = read(path_atom)
 cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)

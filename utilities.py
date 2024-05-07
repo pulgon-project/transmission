@@ -5,6 +5,7 @@ from pulgon_tools_wip.utils import fast_orth, get_character
 import copy
 import scipy.linalg as la
 
+
 def counting_y_from_xy(y,xy, direction=1, tolerance=1e-5):
     tmp1 = xy-y
     if direction>0:
@@ -43,20 +44,22 @@ def get_adapted_matrix(qp, nrot, order, family, a, num_atom, matrices):
     remaining_dof = copy.deepcopy(ndof)
     adapted = []
     dimension = []
-    for ii, chara in enumerate(characters):  # loop quantum number
+    for ii, chara in enumerate(characters):  # loop quantum number / irrep
         projector = np.zeros((ndof, ndof), dtype=np.complex128)
-        # prefactor = chara[0].real / len(chara)
+        prefactor = chara[0].real / len(chara)
+        num_modes = 0
         for kk in range(len(chara)):  # loop ops
-            # projector += prefactor * chara[kk] * matrices[kk]
-            projector += chara[kk] * matrices[kk]
-        basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
-        # print("qp:", qp)
-        # print("error", error)
-        
+            projector += prefactor * chara[kk] * matrices[kk]
+            num_modes += chara[kk].conj() * np.trace(matrices[kk])
+            # projector += chara[kk] * matrices[kk]
+        num_modes = (num_modes / len(chara)).real
+        if num_modes.is_integer():
+            num_modes = num_modes.astype(np.int32)
+        else:
+            logging.ERROR("num_modes is not an integer")
+        # basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+        basis, error = fast_orth(projector, remaining_dof, num_modes)
         adapted.append(basis)
-        remaining_dof -= basis.shape[1]
-        dimension.append(basis.shape[1])
-    adapted = np.concatenate(adapted, axis=1)
 
     return adapted, dimension
 
@@ -79,13 +82,21 @@ def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrice
         adapted = []
         dimension = []
 
-        for ii, chara in enumerate(characters):  # loop quantum number
+        for ii, chara in enumerate(characters):  # loop quantum number / irrep
             projector = np.zeros((ndof, ndof), dtype=np.complex128)
             prefactor = chara[0].real / len(chara)
+            num_modes = 0
             for kk in range(len(chara)):  # loop ops
                 projector += prefactor * chara[kk] * matrices[kk]
+                num_modes += chara[kk].conj() * np.trace(matrices[kk])
                 # projector += chara[kk] * matrices[kk]
-            basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+            num_modes = (num_modes / len(chara)).real
+            if num_modes.is_integer():
+                num_modes = num_modes.astype(np.int32)
+            else:
+                logging.ERROR("num_modes is not an integer")
+            # basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+            basis, error = fast_orth(projector, remaining_dof, num_modes)
             adapted.append(basis)
 
             remaining_dof -= basis.shape[1]
@@ -102,7 +113,6 @@ def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrice
         # val = val[np.argsort(-val)]
         # print("singular values: ", s[:(int(ndof / len(characters)) + 1)])
         # set_trace()
-
     return adapteds, dimensions
 
 
