@@ -1,5 +1,5 @@
 import pytest_datadir
-from ase.io.vasp import read_vasp
+from ase.io.vasp import read_vasp, write_vasp
 import numpy as np
 from ipdb import set_trace
 from pulgon_tools_wip.utils import (
@@ -25,10 +25,11 @@ from utilities import divide_irreps, divide_over_irreps, get_adapted_matrix_mult
 def test_family_1(shared_datadir):
     poscar_ase = read_vasp(shared_datadir / "F5")
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
-    # atom = cyclic._primitive
+    atom = cyclic._primitive
 
-    atom_center = find_axis_center_of_nanotube(poscar_ase)
-    # atom_center = atom
+    # atom_center = find_axis_center_of_nanotube(poscar_ase)
+    atom_center = poscar_ase
+    write_vasp("poscar.vasp", atom_center)
 
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     nrot = obj.get_rotational_symmetry_number()
@@ -45,7 +46,6 @@ def test_family_1(shared_datadir):
     sym.append(rots2.affine_matrix)
 
     ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-6)
-
     ops_car_sym = []
     for op in ops:
         tmp_sym = SymmOp.from_rotation_and_translation(

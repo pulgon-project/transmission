@@ -1,5 +1,6 @@
 import numpy as np
 from ipdb import set_trace
+import ipdb
 import logging
 from pulgon_tools_wip.utils import fast_orth, get_character
 import copy
@@ -71,11 +72,18 @@ def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrice
     for qp in qpoints:
         characters, paras_values, paras_symbols = get_character([qp], nrot, order, family, a)
         characters = np.array(characters)
-
         characters = characters[::2] + characters[1::2]   # combine all sigma(1,-1)
-        # characters = characters[::2]   # combine all sigma(1,-1)
         paras_values = paras_values[::2]
+
         chas.append(characters)
+        res1 = np.round(characters @ characters.conj().T / characters.shape[1], 1)
+        res2 = np.round(characters.conj().T @ characters / characters.shape[1], 1)
+
+        tmp1 = ((np.exp(1j*qp*a/2)+np.exp(-1j*qp*a/2))*np.exp(1j*(np.pi/nrot)*(-4))).conj() * ((np.exp(1j*qp*a/2)+np.exp(-1j*qp*a/2))*np.exp(1j*(np.pi/nrot)*(2))) * 4
+        tmp2 = ((np.exp(1j*qp*a/2)+np.exp(-1j*qp*a/2))*np.exp(1j*(5*np.pi/nrot)*(-4))).conj() * ((np.exp(1j*qp*a/2)+np.exp(-1j*qp*a/2))*np.exp(1j*(5*np.pi/nrot)*(2))) * 4
+        tmp3 = characters[0] @ characters.conj().T[:,6]
+        tmp4 = characters[0] * characters.conj().T[:,6]
+        set_trace()
 
         ndof = 3 * num_atom
         remaining_dof = copy.deepcopy(ndof)
@@ -90,13 +98,16 @@ def get_adapted_matrix_multiq(qpoints, nrot, order, family, a, num_atom, matrice
                 projector += prefactor * chara[kk] * matrices[kk]
                 num_modes += chara[kk].conj() * np.trace(matrices[kk])
                 # projector += chara[kk] * matrices[kk]
+            # set_trace()
             num_modes = (num_modes / len(chara)).real
+
             if num_modes.is_integer():
                 num_modes = num_modes.astype(np.int32)
             else:
+                set_trace()
                 logging.ERROR("num_modes is not an integer")
-            # basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
-            basis, error = fast_orth(projector, remaining_dof, num_modes)
+            basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+            # basis, error = fast_orth(projector, remaining_dof, num_modes)
             adapted.append(basis)
 
             remaining_dof -= basis.shape[1]

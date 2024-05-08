@@ -74,14 +74,13 @@ nrot = obj.get_rotational_symmetry_number()
 num_irreps = nrot * 2
 sym = []
 tran = SymmOp.from_rotation_and_translation(Cn(2 * nrot), [0, 0, 1 / 2])
-
-# set_trace()
 # pg1 = obj.get_generators()
 # sym.append(pg1[0])
 rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
 mirror = SymmOp.reflection([0, 0, 1], [0, 0, 0])
 sym.append(tran.affine_matrix)
 sym.append(rots.affine_matrix)
+# sym.append(pg1[1])
 sym.append(mirror.affine_matrix)
 
 ################### family 2 #############
@@ -94,8 +93,11 @@ sym.append(mirror.affine_matrix)
 # # sym.append(pg1[1])
 # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
 # sym.append(rots.affine_matrix)
+
 #########################################
-ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-6)
+ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-4)
+
+set_trace()
 
 ops_car_sym = []
 for op in ops:
