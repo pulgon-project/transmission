@@ -332,18 +332,16 @@ if __name__ == "__main__":
         if hi > lo + 1:
             values[lo:hi] = values[lo:hi].mean()
 
-    k_test = np.linspace(0, (np.pi-0.1)/aL, 10, endpoint=True)
-    adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, nrot, order_ops, family, aL, num_atoms, matrices)
-    set_trace()
-
+    # k_test = np.linspace(0, (np.pi-0.1)/aL, 10, endpoint=True)
+    # adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, nrot, order_ops, family, aL, num_atoms, matrices)
 
     irreps = []
     if mask.sum() != 0:  # not all False
         # k_w = np.abs(np.angle(values[mask])) / aL
         k_w = np.arccos(values[mask].real) / aL
         k_adapteds = np.unique(k_w)
-        adapteds, dimensions = get_adapted_matrix_multiq(k_adapteds, nrot, order_ops, family, aL, num_atoms, matrices)
-
+        DictParams = {"nrot": nrot, "order": order_ops, "family": family, "a": aL}
+        adapteds, dimensions = get_adapted_matrix_multiq(k_adapteds, DictParams, num_atoms, matrices)
 
     def orthogonalize(values, vectors, adapteds, k_adapteds, dimensions):
         mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)

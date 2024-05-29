@@ -22,7 +22,7 @@ import logging
 from utilities import divide_irreps, divide_over_irreps, get_adapted_matrix_multiq, get_adapted_matrix
 
 
-def test_family_1(shared_datadir):
+def test_family_5(shared_datadir):
     poscar_ase = read_vasp(shared_datadir / "F5")
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
     atom = cyclic._primitive
@@ -53,12 +53,11 @@ def test_family_1(shared_datadir):
         )
         ops_car_sym.append(tmp_sym)
 
-    set_trace()
     matrices = get_matrices(atom_center, ops_car_sym)
     num_atoms = len(atom_center.numbers)
-
     k_test = np.linspace(0, (np.pi - 0.1) / aL, 10, endpoint=True)
-    adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, nrot, order_ops, family, aL, num_atoms, matrices)
-
+    DictParams = {"nrot": 4, "order": order_ops, "family": family, "a": aL,"q":12,"r":1,"f":1.5}
+    adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, DictParams, num_atoms, matrices)
+    set_trace()
 
 

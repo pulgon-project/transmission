@@ -80,7 +80,6 @@ rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
 mirror = SymmOp.reflection([0, 0, 1], [0, 0, 0])
 sym.append(tran.affine_matrix)
 sym.append(rots.affine_matrix)
-# sym.append(pg1[1])
 sym.append(mirror.affine_matrix)
 
 ################### family 2 #############
@@ -97,8 +96,6 @@ sym.append(mirror.affine_matrix)
 #########################################
 ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-4)
 
-set_trace()
-
 ops_car_sym = []
 for op in ops:
     tmp_sym = SymmOp.from_rotation_and_translation(
@@ -110,6 +107,8 @@ matrices = get_matrices(atom_center, ops_car_sym)
 num_atoms = len(atom_center.numbers)
 
 k_test = np.linspace(0, (np.pi - 0.1) / aL, 10, endpoint=True)
-adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, nrot, order_ops, family, aL, num_atoms, matrices)
+
+DictParams = {"nrot":nrot, "order":order_ops, "family":family, "a":aL}
+adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, DictParams, num_atoms, matrices)
 
 set_trace()

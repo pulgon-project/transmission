@@ -366,7 +366,7 @@ if __name__ == "__main__":
         # Compute the total transmission again.
         trans_check[iomega] = np.diag(tRL.conj().T @ tRL).sum().real
         trans_values.append(np.diag(tRL.conj().T @ tRL).real)
-        k_w.append(np.pi * np.arccos(ALadvm[mask_Ladvm].real) / aL)
+        k_w.append(np.arccos(ALadvm[mask_Ladvm].real) / aL)
         if not np.isclose(trans_check[iomega], trans[iomega], atol=1.0):
             print("Problem at omega={} rad/ps".format(inc_omega[iomega]))
 
@@ -376,14 +376,17 @@ if __name__ == "__main__":
     # print(z.dtype)
     # set_trace()
 
+    qpoints_onedim = qvec / aL
     # # cmap = plt.cm.coolwarm
     for i, f_raw in enumerate(omegaL.T):
         if i == 0:
-            plt.plot(qvec, f_raw, '-', color="grey", zorder=1)
+            # plt.plot(qvec, f_raw, '-', color="grey", zorder=1)
+            plt.plot(qpoints_onedim, f_raw, '-', color="grey", zorder=1)
             # scatter = plt.scatter(qvec, f_raw, s=5, c=trans_values_scaled[i], cmap="coolwarm", vmin=0, vmax=1, zorder=2)
         else:
             # ax.plot(qvec, f_raw, 'o-',markersize=3, color="grey")
-            plt.plot(qvec, f_raw, '-', color="grey", zorder=1)
+            # plt.plot(qvec, f_raw, '-', color="grey", zorder=1)
+            plt.plot(qpoints_onedim, f_raw, '-', color="grey", zorder=1)
             # scatter = plt.scatter(qvec, f_raw, s=5, c=trans_values_scaled[i], cmap="coolwarm", vmin=0, vmax=1, zorder=2)
 
     for iomega, omega in enumerate(inc_omega):
@@ -393,5 +396,5 @@ if __name__ == "__main__":
 
     plt.colorbar(scatter, label='Values')
     plt.legend(loc="best")
-    # plt.savefig(path_savfig, dpi=600)
-    plt.show()
+    plt.savefig(path_savfig, dpi=600)
+    # plt.show()
