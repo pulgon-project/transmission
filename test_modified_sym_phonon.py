@@ -29,10 +29,11 @@ from pulgon_tools_wip.utils import (
     brute_force_generate_group_subsquent,
     brute_force_generate_group,
     affine_matrix_op,
+    get_modified_projector
 )
 from pymatgen.core.operations import SymmOp
 from tqdm import tqdm
-from utilities import counting_y_from_xy, get_adapted_matrix, get_adapted_matrix_by_modify
+from utilities import counting_y_from_xy, get_adapted_matrix
 import decimation
 import ase
 
@@ -50,15 +51,16 @@ def main():
     poscar_phonopy = phonon.primitive
     poscar_ase = Atoms(cell=poscar_phonopy.cell, positions=poscar_phonopy.positions, numbers=poscar_phonopy.numbers)
 
+    # write_vasp("poscar.vasp", poscar_ase, direct=True)
+
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
     aL = poscar_ase.cell[2,2]
     atom = cyclic._atom
     atom_center = find_axis_center_of_nanotube(atom)
 
-    # write_vasp("poscar.vasp", atom_center, direct=True)
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
 
-    NQS = 21
+    NQS = 20
     k_start = -np.pi + 0.1
     k_end = np.pi - 0.1
 
@@ -99,29 +101,31 @@ def main():
     num_irreps = 12
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     nrot = obj.get_rotational_symmetry_number()
-    sym  = []
+
+    sym_rot, sym_tran  = [], []
     tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
     # pg1 = obj.get_generators()
     # sym.append(pg1[0])
     rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
     mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    # set_trace()
-    # mirror = SymmOp.reflection([0,0,1], [0,0,0.16666667])
-    sym.append(tran.affine_matrix)
-    sym.append(rots.affine_matrix)
-    sym.append(mirror.affine_matrix)
+
+    sym_tran.append(tran)
+    sym_rot.append(rots)
+    sym_rot.append(mirror)
     ################### family 2 #############
     # family = 2
     # num_irreps = 6
     # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     # nrot = obj.get_rotational_symmetry_number()
-    # sym = []
+    # sym, sym_rot, sym_tran  = [], [], []
     # # pg1 = obj.get_generators()  # change the order to satisfy the character table
     # # sym.append(pg1[1])
     #
-    # tran = np.eye(4)
+    # tran = SymmOp.from_rotation_and_translation(np.eye(3), [0, 0, 1])
     # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
-    # # sym.append(tran)
+    # sym_tran.append(tran)
+    # sym_rot.append(rots)
+    # sym.append(tran.affine_matrix)
     # sym.append(rots.affine_matrix)
     ################### family 5 #############
     # family = 5
@@ -171,41 +175,29 @@ def main():
 
     #####################################################
     # ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-6)
-
-    ops = sym
-    # order_ops = [[1],[2],[3]]
-    order_ops = [[1],[2]]
     # set_trace()
-    # order_ops = [[1]]
-    # set_trace()
-
-    # ops = np.round(ops, 3)
-
-    ops_car_sym = []
-    for op in ops:
-        tmp_sym1 = SymmOp.from_rotation_and_translation(
-            op[:3, :3], op[:3, 3] * aL
-        )
-        ops_car_sym.append(tmp_sym1)
-    matrices = get_matrices(atom_center, ops_car_sym)
-
+    # ops_car_sym = []
+    # for op in ops:
+    #     tmp_sym1 = SymmOp.from_rotation_and_translation(
+    #         op[:3, :3], op[:3, 3] * aL
+    #     )
+    #     ops_car_sym.append(tmp_sym1)
+    # matrices = get_matrices(atom_center, ops_car_sym)
 
     frequencies, distances, bands = [], [], []
     num_atom = len(poscar_ase.numbers)
     for ii, qp in enumerate(tqdm(qpoints_1dim)):   # loop q points
-        DictParams = {"qpoints":qp,  "nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4
+        DictParams = {"qpoints":qp,  "nrot": nrot, "generator_tran": sym_tran, "generator_rot": sym_rot, "family": family, "a": aL}  # F:2,4
         # DictParams = {"qpoints":qp,  "nrot": nrot, "order": order_ops, "family": family, "a": aL, "q":q_rot, "r":r_rot, "f":aL/q_rot_tilde, "p":p_rot}  # F:5
         # DictParams = {"qpoints":qp,  "nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:13
 
-        # adapted, dimensions = get_adapted_matrix(DictParams, num_atom, matrices)
-        adapted, dimensions = get_adapted_matrix_by_modify(DictParams, num_atom, matrices)
         qz = qpoints[ii]
-
         D = phonon.get_dynamical_matrix_at_q(qz)
-        # D = TL.conj().transpose() * np.exp(-1j*qp*aL) + HL + TL * np.exp(1j*qp*aL)
+        # D2 = TL.conj().transpose() * np.exp(-1j*qp*aL) + HL + TL * np.exp(1j*qp*aL)
+
+        adapted, dimensions = get_modified_projector(DictParams, atom_center, D)
 
         D = adapted.conj().T @ D @ adapted
-
         start = 0
         tmp_band = []
         for ir in range(len(dimensions)):

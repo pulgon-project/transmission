@@ -38,14 +38,14 @@ import ase
 
 
 def main():
-    # path_0 = "datas/WS2/6-6-u1-3-defect-1"
+    path_0 = "datas/WS2/6-6-u1-3-defect-1"
     # path_0 = "datas/WS2/6-6-u2-5-defect-1"
     # path_0 = "datas/carbon_nanotube/4x1-u1-3-defect-C-1"
-    path_0 = "datas/carbon_nanotube/4x0-u1-3-defect-C-1"
+    # path_0 = "datas/carbon_nanotube/4x0-u1-3-defect-C-1"
     path_yaml = os.path.join(path_0, "phonopy_pure.yaml")
     path_fc_continum = os.path.join(path_0, "FORCE_CONSTANTS_pure.continuum")
     path_save_phonon = os.path.join(path_0, "phonon_defect_sym_adapted")
-    path_save_phonon_transmission = os.path.join(path_0, "transmission_pure_from_phonon")
+    # path_save_phonon_transmission = os.path.join(path_0, "transmission_pure_from_phonon")
 
     phonon = phonopy.load(phonopy_yaml=path_yaml, force_constants_filename=path_fc_continum, is_compact_fc=True)
     poscar_phonopy = phonon.primitive
@@ -56,7 +56,7 @@ def main():
     atom = cyclic._atom
     atom_center = find_axis_center_of_nanotube(atom)
 
-    write_vasp("poscar.vasp", atom_center, direct=True)
+    # write_vasp("poscar.vasp", atom_center, direct=True)
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
 
     NQS = 21
@@ -96,20 +96,21 @@ def main():
     # qpoints_onedim = qvec / aL
 
     ################ family 4 ##################
-    # family = 4
-    # num_irreps = 12
-    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    # nrot = obj.get_rotational_symmetry_number()
-    # sym  = []
-    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/4])
-    # # pg1 = obj.get_generators()
-    # # sym.append(pg1[0])
-    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # mirror = SymmOp.reflection([0,0,1], [0,0,0.125])
-    # # mirror = SymmOp.reflection([0,0,1], [0,0,0.16666667])
-    # sym.append(tran.affine_matrix)
-    # sym.append(rots.affine_matrix)
-    # sym.append(mirror.affine_matrix)
+    family = 4
+    num_irreps = 12
+    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    nrot = obj.get_rotational_symmetry_number()
+    sym  = []
+    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    # pg1 = obj.get_generators()
+    # sym.append(pg1[0])
+    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    # mirror = SymmOp.reflection([0,0,1], [0,0,0.16666667])
+    # set_trace()
+    sym.append(tran.affine_matrix)
+    sym.append(rots.affine_matrix)
+    sym.append(mirror.affine_matrix)
     ################### family 2 #############
     # family = 2
     # num_irreps = 6
@@ -144,34 +145,35 @@ def main():
 
     # sym.append(pg1[0])
     ################### family 13 #############
-    family = 13
-    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    nrot = obj.get_rotational_symmetry_number()
-    nrot = int(nrot / 2)
-
-    sym = []
-    pg1 = obj.get_generators()  # change the order to satisfy the character table
-    # sym.append(pg1[1])
-    tran = SymmOp.from_rotation_and_translation(Cn(2* nrot), [0, 0, 1/2])
-    rots1 = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-
-    fid = np.arctan2(obj.rot_sym[1][0][1], obj.rot_sym[1][0][0])
-    rots2 = SymmOp.from_rotation_and_translation(U_d(fid), [0, 0, 0])
-    # rots2 = SymmOp.from_rotation_and_translation(U(), [0, 0, 0])
-    rots3 = SymmOp.from_rotation_and_translation(sigmaV(), [0, 0, 0])
-    # rots3 = np.round(pg1[2],5)
-
-    sym.append(tran.affine_matrix)
-    sym.append(rots1.affine_matrix)
-    sym.append(rots2.affine_matrix)
-    # sym.append(rots3)
-    sym.append(rots3.affine_matrix)
+    # family = 13
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.get_rotational_symmetry_number()
+    # nrot = int(nrot / 2)
+    #
+    # sym = []
+    # pg1 = obj.get_generators()  # change the order to satisfy the character table
+    # # sym.append(pg1[1])
+    # tran = SymmOp.from_rotation_and_translation(Cn(2* nrot), [0, 0, 1/2])
+    # rots1 = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    #
+    # fid = np.arctan2(obj.rot_sym[1][0][1], obj.rot_sym[1][0][0])
+    # rots2 = SymmOp.from_rotation_and_translation(U_d(fid), [0, 0, 0])
+    # # rots2 = SymmOp.from_rotation_and_translation(U(), [0, 0, 0])
+    # rots3 = SymmOp.from_rotation_and_translation(sigmaV(), [0, 0, 0])
+    # # rots3 = np.round(pg1[2],5)
+    #
+    # sym.append(tran.affine_matrix)
+    # sym.append(rots1.affine_matrix)
+    # sym.append(rots2.affine_matrix)
+    # # sym.append(rots3)
+    # sym.append(rots3.affine_matrix)
 
     #####################################################
     ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-5)
+
     # ops = np.round(ops, 3)
 
-    set_trace()
+    # set_trace()
     ops_car_sym = []
     for op in ops:
         tmp_sym1 = SymmOp.from_rotation_and_translation(
@@ -193,6 +195,8 @@ def main():
 
         D = phonon.get_dynamical_matrix_at_q(qz)
         # D = TL.conj().transpose() * np.exp(-1j*qp*aL) + HL + TL * np.exp(1j*qp*aL)
+
+
         D = adapted.conj().T @ D @ adapted
 
         start = 0
@@ -258,11 +262,11 @@ def main():
                     ax.plot(np.array(distances), fq, color=color[int(abs(ii-nrot/2+1))])
     elif family==4:
         for ii, freq in enumerate(frequencies):
-            for jj, fq in enumerate(freq):
-                if jj==0 and (ii>=int(nrot) - 1):
-                    ax.plot(np.array(distances), fq, label=labels[int(abs(ii-nrot+1))], color=color[int(abs(ii-nrot+1))])
-                else:
-                    ax.plot(np.array(distances), fq, color=color[int(abs(ii-nrot+1))])
+            idx_ir = (ii > dim_sum - 1).sum()
+            if ii in dim_sum-1:
+                ax.plot(np.array(distances), freq, label=labels[int(abs(idx_ir-nrot+1))], color=color[int(abs(idx_ir-nrot+1))])
+            else:
+                ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir-nrot+1))])
     elif family==5:
         for ii, freq in enumerate(frequencies):
             # set_trace()

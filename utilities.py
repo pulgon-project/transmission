@@ -3,9 +3,13 @@ from ipdb import set_trace
 import ipdb
 import logging
 from pulgon_tools_wip.utils import fast_orth, get_character
+from pulgon_tools_wip.Irreps_tables import get_modified_Dmu
+
 import copy
 import scipy.linalg as la
 from phonopy.units import VaspToTHz
+
+
 
 
 def counting_y_from_xy(y,xy, direction=1, tolerance=1e-5):
@@ -17,83 +21,6 @@ def counting_y_from_xy(y,xy, direction=1, tolerance=1e-5):
     counts = tmp2.sum()
     return counts
 
-
-def get_adapted_matrix_by_modify(DictParams, num_atom, matrices):
-    """
-
-    Args:
-        qp: q/k point
-        nrot: The rotational quantum number of the structure "Cn"
-        order: The multiplication order from generators to symmetry operations
-        family: The line group family index
-        a: The period length in z direction
-        num_atom: The number of atoms
-        matrices:
-
-    Returns:
-        adapted: The symmetry projection basis matrix for irreducible representation
-
-    """
-    characters, paras_values, paras_symbols = get_character(
-        DictParams
-    )
-    characters = np.array(characters)
-
-    ind_pi = 0
-    for symb in paras_symbols:
-        symb = str(symb)
-        if "pi" in symb:
-            ind_pi +=1
-
-    for ii in range(ind_pi):
-        characters = (
-            characters[::2] + characters[1::2]
-        )  # depend on the dimension of the character
-        paras_values = paras_values[::2]
-    # idx_non_zero = np.nonzero(characters)
-    # characters[idx_non_zero[0], idx_non_zero[1]] = characters[idx_non_zero[0], idx_non_zero[1]] / np.abs(
-    #     characters[idx_non_zero[0], idx_non_zero[1]])
-
-    ndof = 3 * num_atom
-    remaining_dof = copy.deepcopy(ndof)
-    adapted = []
-    dimension = []
-    for ii, chara in enumerate(characters):  # loop quantum number / irrep
-        projector = np.zeros((ndof, ndof), dtype=np.complex128)
-        prefactor = chara[0].real / len(chara)
-
-        tmp_m = paras_values[ii][1]
-        num_modes = 0
-        for kk in range(len(chara)):  # loop generator
-            if kk==0:
-                projector = prefactor * chara[kk].conj() * matrices[kk]
-                # projector = chara[kk].copy()
-            else:
-                # projector += (prefactor * chara[kk].conj() * matrices[kk])
-                projector = np.multiply(projector, (prefactor * chara[kk].conj() * matrices[kk]))
-
-            num_modes += chara[kk].conj() * np.trace(matrices[kk])
-            # projector += chara[kk] * matrices[kk]
-        projector = projector / len(chara)
-
-        num_modes = (num_modes / len(chara)).real
-        if num_modes.is_integer():
-            num_modes = num_modes.astype(np.int32)
-        # else:
-        #     set_trace()
-        #     logging.ERROR("num_modes is not an integer")
-        basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
-        remaining_dof -= basis.shape[1]
-        # basis, error = fast_orth(projector, remaining_dof, num_modes)
-
-        dimension.append(basis.shape[1])
-        adapted.append(basis)
-
-    adapted = np.concatenate(adapted, axis=1)
-    if adapted.shape[0] != adapted.shape[1] or adapted.shape[0] != ndof:
-        set_trace()
-        logging.ERROR("the shape of adapted is incorrect")
-    return adapted, dimension
 
 
 
@@ -166,9 +93,9 @@ def get_adapted_matrix(DictParams, num_atom, matrices):
         else:
             set_trace()
             logging.ERROR("num_modes is not an integer")
-        # basis, error = fast_orth(projector, remaining_dof, int(ndof / len(characters)))
+        basis, error = fast_orth(projector, int(ndof / len(characters)))
         # remaining_dof -= basis.shape[1]
-        basis, error = fast_orth(projector, remaining_dof, num_modes)
+        # basis, error = fast_orth(projector, num_modes)
 
         dimension.append(basis.shape[1])
         adapted.append(basis)
@@ -235,10 +162,6 @@ def get_adapted_matrix_multiq(qpoints, DictParams, num_atom, matrices):
         adapteds.append(adapted)
         dimensions.append(dimension)
 
-        # print("qpoint:", qp)
-        # print("error:", error)
-        # _, s, _ = la.svd(projector)
-        # print("singular values: ", s[:(int(ndof / len(characters)) + 1)])
     return adapteds, dimensions
 
 
