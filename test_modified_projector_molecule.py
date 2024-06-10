@@ -181,26 +181,35 @@ def get_modified_projector_of_molecular(g_rot, atom):
         num_modes = 0
         tmp1, tmp2 = [], []
         for ii in range(len(Dmu_rot)):
+
+            # the degeneracy of IR
+            if Dmu_rot[0].ndim == 0:
+                d_mu = 1
+            else:
+                d_mu = len(Dmu_rot[0])
+
             if ii == 0:
                 projector = TensorProduct(np.array(Dmu_rot[ii].conj()), matrices_apg[ii])
             else:
                 projector += TensorProduct( np.array(Dmu_rot[ii].conj()), matrices_apg[ii])
 
-            if Dmu_rot[ii].ndim != 0:
-                num_modes += Dmu_rot[ii].trace() * matrices_apg[ii].trace()
+            if d_mu==1:
+                num_modes += Dmu_rot[ii].conj() * matrices_apg[ii].trace()
             else:
-                num_modes += Dmu_rot[ii] * matrices_apg[ii].trace()
-
+                num_modes += Dmu_rot[ii].conj().trace() * matrices_apg[ii].trace()
         num_modes = int(num_modes.real / len(Dmu_rot))   # the number of modes for each IR
         projector = projector / (len(Dmu_rot))
 
-        if num_modes ==0:
-            continue
 
         u, s, vh = scipy.linalg.svd(projector)
         error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
         if error > 0.05:
             set_trace()
+        # set_trace()
+
+        if num_modes ==0:
+            dimensions.append(num_modes)
+            continue
 
         if Dmu_rot[ii].ndim == 0:
             basis.append(u[:, :num_modes])
@@ -220,9 +229,8 @@ def get_modified_projector_of_molecular(g_rot, atom):
 
     adapted = np.concatenate(basis, axis=1)
     if adapted.shape[0] != adapted.shape[1]:
-        print("the number of eigenvector is %d" % adapted.shape[1], "%d" % adapted.shape[0] + "is required")
-        set_trace()
-    return adapted
+        print("the number of eigenvector is %d" % adapted.shape[1], ", but %d" % adapted.shape[0] + " is required")
+    return adapted, dimensions
 
 def main():
     path_0 = "datas/molecular/CH4"
@@ -235,7 +243,8 @@ def main():
     for ii, rot in enumerate(rots):
         sym.append(SymmOp.from_rotation_and_translation(rotation_matrix=rot, translation_vec=trans[ii]))
 
-    get_modified_projector_of_molecular(sym, atom)
+    adapted, dimensions = get_modified_projector_of_molecular(sym, atom)
+    set_trace()
 
 
 if __name__ == '__main__':

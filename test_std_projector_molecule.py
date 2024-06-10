@@ -187,7 +187,6 @@ def get_modified_projector_of_molecular(g_rot, atom):
         num_modes = 0
         tmp1, tmp2 = [], []
         for ii in range(len(Dmu_rot)):
-
             if d_mu == 1:
                 num_modes += Dmu_rot[ii] * matrices_apg[ii].trace()
                 if ii == 0:
@@ -203,25 +202,29 @@ def get_modified_projector_of_molecular(g_rot, atom):
 
         num_modes = int(num_modes.real * d_mu / len(Dmu_rot))
         projector = d_mu * projector / (len(Dmu_rot))
-
-        u, s, vh = scipy.linalg.svd(projector)
-        error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
+        # set_trace()
 
         if num_modes ==0:
+            dimensions.append(num_modes)
             continue
 
-        # print("m=%s" % tmp_m1, "error=%s" % error)
+        u, s, vh = scipy.linalg.svd(projector)
+
+        # set_trace()
+        error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
         if error > 0.05:
             print("the error is %s" % error)
             set_trace()
-        set_trace()
+
+
+        # print("m=%s" % tmp_m1, "error=%s" % error)
         basis.append(u[:,:num_modes])
         dimensions.append(num_modes)
 
     adapted = np.concatenate(basis, axis=1)
     if adapted.shape[0] != adapted.shape[1]:
         print("the number of eigenvector is %d" % adapted.shape[1], "%d" % adapted.shape[0] + "is required")
-    return adapted
+    return adapted, dimensions
 
 def main():
     path_0 = "datas/molecular/CH4"
@@ -233,9 +236,9 @@ def main():
     sym = []
     for ii, rot in enumerate(rots):
         sym.append(SymmOp.from_rotation_and_translation(rotation_matrix=rot, translation_vec=trans[ii]))
-    adapted = get_modified_projector_of_molecular(sym, atom)
-
+    adapted, dimensions = get_modified_projector_of_molecular(sym, atom)
     set_trace()
+
 
 if __name__ == '__main__':
     main()
