@@ -183,18 +183,15 @@ def get_modified_projector_of_molecular(g_rot, atom):
         tmp1, tmp2 = [], []
         for ii in range(len(Dmu_rot)):
             if ii == 0:
-                projector = TensorProduct(matrices_apg[ii], np.array(Dmu_rot[ii].conj()))
+                set_trace()
+                projector = Dmu_rot[ii].conj() * matrices_apg[ii]
             else:
-                projector += TensorProduct( matrices_apg[ii], np.array(Dmu_rot[ii].conj()))
+                projector += Dmu_rot[ii].conj() * matrices_apg[ii]
 
             if Dmu_rot[ii].ndim != 0:
                 num_modes += Dmu_rot[ii].trace() * matrices_apg[ii].trace()
-                tmp1.append(matrices_apg[ii].trace())
-                tmp2.append(Dmu_rot[ii])
             else:
                 num_modes += Dmu_rot[ii] * matrices_apg[ii].trace()
-                tmp1.append(matrices_apg[ii].trace())
-                tmp2.append(Dmu_rot[ii])
 
         num_modes = int(num_modes.real / len(Dmu_rot))
         projector = projector / (len(Dmu_rot))

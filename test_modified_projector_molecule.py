@@ -177,7 +177,6 @@ def get_modified_projector_of_molecular(g_rot, atom):
 
     basis, dimensions = [], []
     for i_Dmu, Dmu_rot in enumerate(GM):
-
         ###### generate the projector for point group ########
         num_modes = 0
         tmp1, tmp2 = [], []
