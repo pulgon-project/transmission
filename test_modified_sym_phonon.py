@@ -196,8 +196,11 @@ def main():
         # D2 = TL.conj().transpose() * np.exp(-1j*qp*aL) + HL + TL * np.exp(1j*qp*aL)
 
         adapted, dimensions = get_modified_projector(DictParams, atom_center, D)
-
         D = adapted.conj().T @ D @ adapted
+
+        # D_ro = np.round(D,3)
+        # set_trace()
+
         start = 0
         tmp_band = []
         for ir in range(len(dimensions)):
@@ -264,7 +267,8 @@ def main():
     elif family==4:
         for ii, freq in enumerate(frequencies):
             idx_ir = (ii > dim_sum - 1).sum()
-            if ii in dim_sum-1 and idx_ir>=int(nrot) - 1:
+
+            if ii in dim_sum-1: #and idx_ir>=int(nrot) - 1:
                 ax.plot(np.array(distances), freq, label=labels[int(abs(idx_ir-nrot+1))], color=color[int(abs(idx_ir-nrot+1))])
             else:
                 ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir-nrot+1))])
@@ -285,7 +289,6 @@ def main():
             else:
                 ax.plot(np.array(distances), freq, color=color[idx_ir])
 
-
     # plt.xlim(0, 0.6)  # x轴刻度范围
     # plt.ylim(-2, 2)  # x轴刻度范围
     plt.xlabel("qpoints_onedim")
@@ -305,7 +308,6 @@ def main():
     #         counts += counting_y_from_xy(omega, freq)
     #     y[ii] = counts
     # ax1.plot(x, y, label="sum_all", color="grey")
-    #
     #
     # ym = []
     # for im, freq in enumerate(frequencies):

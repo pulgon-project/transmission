@@ -173,33 +173,39 @@ def get_matrices(atoms, ops_sym):
 
 def get_modified_projector_of_molecular(g_rot, atom):
     matrices_apg = get_matrices(atom, g_rot)
-    GM = ir_table()   # the order of Gm correspond to the matrices_apg
+    GM = ir_table()
 
     basis, dimensions = [], []
     for i_Dmu, Dmu_rot in enumerate(GM):
 
-        ###### generate the projector for point group ########
+        ###### generate the projector for axial point group ########
         num_modes = 0
         tmp1, tmp2 = [], []
         for ii in range(len(Dmu_rot)):
             if ii == 0:
-                projector = TensorProduct(np.array(Dmu_rot[ii].conj()), matrices_apg[ii])
+                projector = TensorProduct(matrices_apg[ii], np.array(Dmu_rot[ii].conj()))
             else:
-                projector += TensorProduct( np.array(Dmu_rot[ii].conj()), matrices_apg[ii])
+                projector += TensorProduct( matrices_apg[ii], np.array(Dmu_rot[ii].conj()))
 
             if Dmu_rot[ii].ndim != 0:
                 num_modes += Dmu_rot[ii].trace() * matrices_apg[ii].trace()
+                tmp1.append(matrices_apg[ii].trace())
+                tmp2.append(Dmu_rot[ii])
             else:
                 num_modes += Dmu_rot[ii] * matrices_apg[ii].trace()
+                tmp1.append(matrices_apg[ii].trace())
+                tmp2.append(Dmu_rot[ii])
 
-        num_modes = int(num_modes.real / len(Dmu_rot))   # the number of modes for each IR
+        num_modes = int(num_modes.real / len(Dmu_rot))
         projector = projector / (len(Dmu_rot))
+
+        u, s, vh = scipy.linalg.svd(projector)
+        error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
 
         if num_modes ==0:
             continue
 
-        u, s, vh = scipy.linalg.svd(projector)
-        error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
+        # print("m=%s" % tmp_m1, "error=%s" % error)
         if error > 0.05:
             set_trace()
 
@@ -209,21 +215,27 @@ def get_modified_projector_of_molecular(g_rot, atom):
         else:
             tmp_basis = u[:, :num_modes]
 
-            tmp_basis1 = np.array(np.array_split(tmp_basis, len(Dmu_rot[0]), axis=0))
+
+            # set_trace()
+
+
+            tmp_basis1 = np.array_split(tmp_basis, 2, axis=0)
+            basis_block = []
+            for tmp in tmp_basis1:
+                tmp1 = np.array_split(tmp, 2, axis=1)
+                basis_block.append(tmp1)
+            basis_block = np.array(basis_block)
+            basis_block = basis_block.reshape(4, 108, 9)
+            # res = (basis_block[0,:,:]==tmp_basis[:108,:9]).all()
+
             basis_Dmu = np.abs(scipy.linalg.orth(Dmu_rot[ii]))
             # basis_Dmu = np.array([[0, 1], [1, 0]])
-
-            ###### partial scalar product ######
-            basis_block1 = np.einsum("ij,jlm->ilm", basis_Dmu[0][np.newaxis], tmp_basis1)[0]
+            basis_Dmu = np.abs(basis_Dmu).reshape(-1)
+            basis_block1 = np.einsum("ij,jlm->ilm", basis_Dmu[np.newaxis], basis_block)[0]
 
             basis.append(basis_block1)
             dimensions.append(basis_block1.shape[1])
 
-    adapted = np.concatenate(basis, axis=1)
-    if adapted.shape[0] != adapted.shape[1]:
-        print("the number of eigenvector is %d" % adapted.shape[1], "%d" % adapted.shape[0] + "is required")
-        set_trace()
-    return adapted
 
 def main():
     path_0 = "datas/molecular/CH4"
