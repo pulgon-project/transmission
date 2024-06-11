@@ -1,30 +1,12 @@
-import copy
 import logging
 import os.path
-from ase import Atoms
-import matplotlib.pyplot as plt
 import numpy as np
-import phonopy
-import pretty_errors
 import scipy.linalg as la
 from ase.io.vasp import read_vasp, write_vasp
 from ipdb import set_trace
-from phonopy.phonon.band_structure import get_band_qpoints_and_path_connections
-from phonopy.units import VaspToTHz
-from pulgon_tools_wip.detect_generalized_translational_group import CyclicGroupAnalyzer
-from pulgon_tools_wip.detect_point_group import LineGroupAnalyzer
-from pulgon_tools_wip.utils import (
-    fast_orth,
-    get_matrices,
-)
 from pymatgen.core.operations import SymmOp
-from tqdm import tqdm
-from utilities import counting_y_from_xy, get_adapted_matrix
-import decimation
-import ase
 from spglib import get_symmetry_dataset
 from pymatgen.util.coord import find_in_coord_list
-from sympy.physics.quantum import TensorProduct
 import scipy
 
 
@@ -228,7 +210,7 @@ def get_modified_projector_of_molecular(g_rot, atom):
 
 def main():
     path_0 = "datas/molecular/CH4"
-    atom = read_vasp(os.path.join(path_0, "H4C.vasp"))
+    atom = read_vasp(os.path.join(path_0, "H4C"))
     datasets = get_symmetry_dataset(atom)
     rots = datasets["rotations"]
     trans = datasets["translations"]

@@ -1,27 +1,10 @@
-import copy
 import logging
 import os.path
-from ase import Atoms
-import matplotlib.pyplot as plt
 import numpy as np
-import phonopy
-import pretty_errors
 import scipy.linalg as la
 from ase.io.vasp import read_vasp, write_vasp
 from ipdb import set_trace
-from phonopy.phonon.band_structure import get_band_qpoints_and_path_connections
-from phonopy.units import VaspToTHz
-from pulgon_tools_wip.detect_generalized_translational_group import CyclicGroupAnalyzer
-from pulgon_tools_wip.detect_point_group import LineGroupAnalyzer
-from pulgon_tools_wip.utils import (
-    fast_orth,
-    get_matrices,
-)
 from pymatgen.core.operations import SymmOp
-from tqdm import tqdm
-from utilities import counting_y_from_xy, get_adapted_matrix
-import decimation
-import ase
 from spglib import get_symmetry_dataset
 from pymatgen.util.coord import find_in_coord_list
 from sympy.physics.quantum import TensorProduct
@@ -166,7 +149,6 @@ def get_matrices(atoms, ops_sym):
             matrix[3 * idx : 3 * (idx + 1), 3 * jj : 3 * (jj + 1)] = ops_sym[
                 ii
             ].rotation_matrix.copy()
-            # matrix[4 * idx : 4 * (idx + 1), 4 * jj : 4 * (jj + 1)] = ops_sym[ii].affine_matrix.copy()
         matrices.append(matrix)
     return matrices
 
@@ -177,35 +159,32 @@ def get_modified_projector_of_molecular(g_rot, atom):
 
     basis, dimensions = [], []
     for i_Dmu, Dmu_rot in enumerate(GM):
+
+        # the degeneracy of IR
+        if Dmu_rot[0].ndim == 0:
+            d_mu = 1
+        else:
+            d_mu = len(Dmu_rot[0])
+
         ###### generate the projector for point group ########
         num_modes = 0
-        tmp1, tmp2 = [], []
         for ii in range(len(Dmu_rot)):
-
-            # the degeneracy of IR
-            if Dmu_rot[0].ndim == 0:
-                d_mu = 1
-            else:
-                d_mu = len(Dmu_rot[0])
-
             if ii == 0:
                 projector = TensorProduct(np.array(Dmu_rot[ii].conj()), matrices_apg[ii])
             else:
                 projector += TensorProduct( np.array(Dmu_rot[ii].conj()), matrices_apg[ii])
-
             if d_mu==1:
                 num_modes += Dmu_rot[ii].conj() * matrices_apg[ii].trace()
             else:
                 num_modes += Dmu_rot[ii].conj().trace() * matrices_apg[ii].trace()
+
         num_modes = int(num_modes.real / len(Dmu_rot))   # the number of modes for each IR
         projector = projector / (len(Dmu_rot))
-
 
         u, s, vh = scipy.linalg.svd(projector)
         error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
         if error > 0.05:
             set_trace()
-        # set_trace()
 
         if num_modes ==0:
             dimensions.append(num_modes)
@@ -222,8 +201,10 @@ def get_modified_projector_of_molecular(g_rot, atom):
             # basis_Dmu = np.array([[0, 1], [1, 0]])
 
             ###### partial scalar product ######
-            basis_block1 = np.einsum("ij,jlm->ilm", basis_Dmu[0][np.newaxis], tmp_basis1)[0]
-
+            # for ii in range(d_mu):
+            #     basis_block1 = np.einsum("ij,jlm->ilm", basis_Dmu[:, ii][np.newaxis], tmp_basis1)[0]
+            #     basis.append(basis_block1)
+            basis_block1 = np.einsum("ij,jlm->ilm", basis_Dmu[:, 0][np.newaxis], tmp_basis1)[0]
             basis.append(basis_block1)
             dimensions.append(basis_block1.shape[1])
 
@@ -232,9 +213,10 @@ def get_modified_projector_of_molecular(g_rot, atom):
         print("the number of eigenvector is %d" % adapted.shape[1], ", but %d" % adapted.shape[0] + " is required")
     return adapted, dimensions
 
+
 def main():
     path_0 = "datas/molecular/CH4"
-    atom = read_vasp(os.path.join(path_0, "H4C.vasp"))
+    atom = read_vasp(os.path.join(path_0, "H4C"))
     datasets = get_symmetry_dataset(atom)
     rots = datasets["rotations"]
     trans = datasets["translations"]

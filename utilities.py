@@ -73,7 +73,6 @@ def get_adapted_matrix(DictParams, num_atom, matrices):
     dimension = []
     for ii, chara in enumerate(characters):  # loop quantum number / irrep
         projector = np.zeros((ndof, ndof), dtype=np.complex128)
-        # prefactor = chara[0].real / len(chara)
         prefactor = 1 / len(characters)
 
         tmp_m = paras_values[ii][1]
