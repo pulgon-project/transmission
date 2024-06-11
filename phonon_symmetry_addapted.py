@@ -107,7 +107,6 @@ def main():
     rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
     mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
     # mirror = SymmOp.reflection([0,0,1], [0,0,0.16666667])
-    # set_trace()
     sym.append(tran.affine_matrix)
     sym.append(rots.affine_matrix)
     sym.append(mirror.affine_matrix)
@@ -263,7 +262,7 @@ def main():
     elif family==4:
         for ii, freq in enumerate(frequencies):
             idx_ir = (ii > dim_sum - 1).sum()
-            if ii in dim_sum-1:
+            if ii in dim_sum-1 and idx_ir>=nrot - 1:
                 ax.plot(np.array(distances), freq, label=labels[int(abs(idx_ir-nrot+1))], color=color[int(abs(idx_ir-nrot+1))])
             else:
                 ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir-nrot+1))])

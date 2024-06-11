@@ -1,6 +1,7 @@
 import logging
 import os.path
 import numpy as np
+import phonopy
 import scipy.linalg as la
 from ase.io.vasp import read_vasp, write_vasp
 from ipdb import set_trace
@@ -210,6 +211,11 @@ def get_modified_projector_of_molecular(g_rot, atom):
 
 def main():
     path_0 = "datas/molecular/CH4"
+    path_yaml = os.path.join(path_0, "phonopy_disp.yaml")
+    path_fc_set = os.path.join(path_0, "FORCE_SETS")
+    path_save_fc_sym = os.path.join(path_0, "fc_sym")
+
+
     atom = read_vasp(os.path.join(path_0, "H4C"))
     datasets = get_symmetry_dataset(atom)
     rots = datasets["rotations"]
@@ -219,7 +225,17 @@ def main():
     for ii, rot in enumerate(rots):
         sym.append(SymmOp.from_rotation_and_translation(rotation_matrix=rot, translation_vec=trans[ii]))
     adapted, dimensions = get_modified_projector_of_molecular(sym, atom)
-    set_trace()
+
+    ##### force constant #####
+    phonon = phonopy.load(phonopy_yaml=path_yaml, force_sets_filename=path_fc_set)
+    fc = phonon.force_constants
+
+    fc_reshape = fc.transpose(0,2,1,3).reshape(15,15)
+    fc_adapted = np.abs(adapted.conj().T @ fc_reshape @ adapted)
+
+    np.savetxt(path_save_fc_sym, fc_adapted, fmt="%10.2f")
+    print(dimensions)
+    # set_trace()
 
 
 if __name__ == '__main__':
