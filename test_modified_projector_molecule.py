@@ -9,6 +9,7 @@ from spglib import get_symmetry_dataset
 from pymatgen.util.coord import find_in_coord_list
 from sympy.physics.quantum import TensorProduct
 import scipy
+import phonopy
 
 
 def ir_table():
@@ -200,13 +201,20 @@ def get_modified_projector_of_molecular(g_rot, atom):
             basis_Dmu = np.abs(scipy.linalg.orth(Dmu_rot[ii]))
             # basis_Dmu = np.array([[0, 1], [1, 0]])
 
+            # set_trace()
             ###### partial scalar product ######
-            # for ii in range(d_mu):
-            #     basis_block1 = np.einsum("ij,jlm->ilm", basis_Dmu[:, ii][np.newaxis], tmp_basis1)[0]
-            #     basis.append(basis_block1)
-            basis_block1 = np.einsum("ij,jlm->ilm", basis_Dmu[:, 0][np.newaxis], tmp_basis1)[0]
-            basis.append(basis_block1)
-            dimensions.append(basis_block1.shape[1])
+            for ii in range(d_mu):
+                basis_block1 = np.einsum("ij,jlm->ilm", basis_Dmu[:, ii][np.newaxis], tmp_basis1)[0]
+
+                basis_block1 = basis_block1 / np.linalg.norm(basis_block1)
+
+                # set_trace()
+                basis.append(basis_block1)
+            dimensions.append(d_mu* tmp_basis1.shape[2])
+
+            # basis_block1 = np.einsum("ij,jlm->ilm", basis_Dmu[:, 0][np.newaxis], tmp_basis1)[0]
+            # basis.append(basis_block1)
+            # dimensions.append(basis_block1.shape[1])
 
     adapted = np.concatenate(basis, axis=1)
     if adapted.shape[0] != adapted.shape[1]:
@@ -215,6 +223,12 @@ def get_modified_projector_of_molecular(g_rot, atom):
 
 
 def main():
+    path_0 = "datas/molecular/CH4"
+    path_yaml = os.path.join(path_0, "phonopy_disp.yaml")
+    path_fc_set = os.path.join(path_0, "FORCE_SETS")
+    path_save_fc_sym = os.path.join(path_0, "fc_sym_modified")
+    path_save_fc_adapted = os.path.join(path_0, "adapted_modified")
+
     path_0 = "datas/molecular/CH4"
     atom = read_vasp(os.path.join(path_0, "H4C"))
     datasets = get_symmetry_dataset(atom)
@@ -226,6 +240,21 @@ def main():
         sym.append(SymmOp.from_rotation_and_translation(rotation_matrix=rot, translation_vec=trans[ii]))
 
     adapted, dimensions = get_modified_projector_of_molecular(sym, atom)
+
+    ##### force constant #####
+    phonon = phonopy.load(phonopy_yaml=path_yaml, force_sets_filename=path_fc_set)
+    fc = phonon.force_constants
+
+    fc_reshape = fc.transpose(0,2,1,3).reshape(15,15)
+    fc_adapted = np.abs(adapted.conj().T @ fc_reshape @ adapted)
+
+
+
+    np.savetxt(path_save_fc_sym, fc_adapted, fmt="%10.3f")
+    np.savetxt(path_save_fc_adapted, adapted)
+    print("dimension:")
+    print(dimensions)
+
     set_trace()
 
 

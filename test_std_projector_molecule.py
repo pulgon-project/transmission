@@ -9,7 +9,7 @@ from pymatgen.core.operations import SymmOp
 from spglib import get_symmetry_dataset
 from pymatgen.util.coord import find_in_coord_list
 import scipy
-
+from utilities import commuting
 
 def ir_table():
     GM1 = np.array([1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,])
@@ -139,7 +139,6 @@ def get_perms_from_ops_mol(atoms, ops_sym, symprec=1e-2, round=4):
 
 def get_matrices(atoms, ops_sym):
     perms_table = get_perms_from_ops_mol(atoms, ops_sym)
-
     natoms = len(atoms.numbers)
     matrices = []
     for ii, perm in enumerate(perms_table):
@@ -168,38 +167,26 @@ def get_modified_projector_of_molecular(g_rot, atom):
 
         ###### generate the projector for axial point group ########
         num_modes = 0
-        tmp1, tmp2 = [], []
+        ndof = 3 * len(atom)
+        projector = np.zeros((ndof, ndof), dtype=np.complex128)
         for ii in range(len(Dmu_rot)):
             if d_mu == 1:
-                num_modes += Dmu_rot[ii] * matrices_apg[ii].trace()
-                if ii == 0:
-                    projector = Dmu_rot[ii].conj() * matrices_apg[ii]
-                else:
-                    projector += Dmu_rot[ii].conj() * matrices_apg[ii]
+                num_modes += Dmu_rot[ii].conj() * matrices_apg[ii].trace()
+                projector += Dmu_rot[ii].conj() * matrices_apg[ii]
             else:
-                num_modes += Dmu_rot[ii].trace() * matrices_apg[ii].trace()
-                if ii == 0:
-                    projector = Dmu_rot[ii].conj().trace() * matrices_apg[ii]
-                else:
-                    projector += Dmu_rot[ii].conj().trace() * matrices_apg[ii]
-
+                num_modes += Dmu_rot[ii].conj().trace() * matrices_apg[ii].trace()
+                projector += Dmu_rot[ii].conj().trace() * matrices_apg[ii]
         num_modes = int(num_modes.real * d_mu / len(Dmu_rot))
         projector = d_mu * projector / (len(Dmu_rot))
-        # set_trace()
 
         if num_modes ==0:
             dimensions.append(num_modes)
             continue
-
         u, s, vh = scipy.linalg.svd(projector)
-
-        # set_trace()
         error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
         if error > 0.05:
             print("the error is %s" % error)
             set_trace()
-
-
         # print("m=%s" % tmp_m1, "error=%s" % error)
         basis.append(u[:,:num_modes])
         dimensions.append(num_modes)
@@ -209,12 +196,13 @@ def get_modified_projector_of_molecular(g_rot, atom):
         print("the number of eigenvector is %d" % adapted.shape[1], "%d" % adapted.shape[0] + "is required")
     return adapted, dimensions
 
+
 def main():
     path_0 = "datas/molecular/CH4"
     path_yaml = os.path.join(path_0, "phonopy_disp.yaml")
     path_fc_set = os.path.join(path_0, "FORCE_SETS")
-    path_save_fc_sym = os.path.join(path_0, "fc_sym")
-
+    path_save_fc_sym = os.path.join(path_0, "fc_sym_std")
+    path_save_fc_adapted = os.path.join(path_0, "adapted_std")
 
     atom = read_vasp(os.path.join(path_0, "H4C"))
     datasets = get_symmetry_dataset(atom)
@@ -226,16 +214,18 @@ def main():
         sym.append(SymmOp.from_rotation_and_translation(rotation_matrix=rot, translation_vec=trans[ii]))
     adapted, dimensions = get_modified_projector_of_molecular(sym, atom)
 
-    ##### force constant #####
+    ##### force constant #########
     phonon = phonopy.load(phonopy_yaml=path_yaml, force_sets_filename=path_fc_set)
     fc = phonon.force_constants
-
     fc_reshape = fc.transpose(0,2,1,3).reshape(15,15)
     fc_adapted = np.abs(adapted.conj().T @ fc_reshape @ adapted)
+    ##############################
 
-    np.savetxt(path_save_fc_sym, fc_adapted, fmt="%10.2f")
+    np.savetxt(path_save_fc_sym, fc_adapted, fmt="%10.3f")
+    np.savetxt(path_save_fc_adapted, adapted)
+
+    print("dimension:")
     print(dimensions)
-    # set_trace()
 
 
 if __name__ == '__main__':

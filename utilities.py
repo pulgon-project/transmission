@@ -3,12 +3,11 @@ from ipdb import set_trace
 import ipdb
 import logging
 from pulgon_tools_wip.utils import fast_orth, get_character
-from pulgon_tools_wip.Irreps_tables import get_modified_Dmu
 
 import copy
 import scipy.linalg as la
 from phonopy.units import VaspToTHz
-
+import scipy
 
 
 
@@ -20,8 +19,6 @@ def counting_y_from_xy(y,xy, direction=1, tolerance=1e-5):
         tmp2 = np.logical_and(tmp1[:, 1:] < tolerance, tmp1[:, :-1] >= -tolerance)
     counts = tmp2.sum()
     return counts
-
-
 
 
 def get_adapted_matrix(DictParams, num_atom, matrices):
@@ -43,66 +40,45 @@ def get_adapted_matrix(DictParams, num_atom, matrices):
     characters, paras_values, paras_symbols = get_character(
         DictParams
     )
-    characters = np.array(characters)
-
-    ind_pi = 0
-    for symb in paras_symbols:
-        symb = str(symb)
-        if "pi" in symb:
-            ind_pi +=1
-
-    for ii in range(ind_pi):
-        characters = (
-            characters[::2] + characters[1::2]
-        )  # depend on the dimension of the character
-        paras_values = paras_values[::2]
-
-
-    if DictParams["family"] == 13:
-        characters = characters / 4
-    elif DictParams["family"] == 5:
-        characters = characters /2
-
-    # idx_non_zero = np.nonzero(characters)
-    # characters[idx_non_zero[0], idx_non_zero[1]] = characters[idx_non_zero[0], idx_non_zero[1]] / np.abs(
-    #     characters[idx_non_zero[0], idx_non_zero[1]])
+    if characters.ndim ==2:
+        d_mu = 1
+    else:
+        d_mu = characters.shape[-1]
 
     ndof = 3 * num_atom
-    remaining_dof = copy.deepcopy(ndof)
     adapted = []
     dimension = []
-    for ii, chara in enumerate(characters):  # loop quantum number / irrep
-        projector = np.zeros((ndof, ndof), dtype=np.complex128)
-        prefactor = 1 / len(characters)
-
-        tmp_m = paras_values[ii][1]
+    for ii, chara in enumerate(characters):  # loop IR
         num_modes = 0
+        projector = np.zeros((ndof, ndof), dtype=np.complex128)
         for kk in range(len(chara)):  # loop ops
-            projector += prefactor * chara[kk] * matrices[kk]
-            # projector += chara[kk] * matrices[kk]
+            if d_mu==1:
+                chara_conj = chara[kk].conj()
+            else:
+                chara_conj = chara[kk].conj().trace()
+            num_modes += chara_conj * matrices[kk].trace()
+            projector += chara_conj * matrices[kk]
 
-            num_modes += chara[kk].conj() * np.trace(matrices[kk])
+        projector = d_mu * projector / len(chara)
         num_modes = (num_modes / len(chara)).real
-
-        if DictParams["qpoints"] == 0:
-            num_modes = num_modes * 2
-
         if num_modes.is_integer():
             num_modes = num_modes.astype(np.int32)
         else:
             set_trace()
             logging.ERROR("num_modes is not an integer")
-        basis, error = fast_orth(projector, int(ndof / len(characters)))
-        # remaining_dof -= basis.shape[1]
         # basis, error = fast_orth(projector, num_modes)
+        u, s, vh = scipy.linalg.svd(projector)
+        basis = u[:,:num_modes]
+        error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
+        # set_trace()
 
         dimension.append(basis.shape[1])
         adapted.append(basis)
 
     adapted = np.concatenate(adapted, axis=1)
-    if adapted.shape[0] != adapted.shape[1] or adapted.shape[0] != ndof:
-        set_trace()
-        logging.ERROR("the shape of adapted is incorrect")
+    # if adapted.shape[0] != adapted.shape[1] or adapted.shape[0] != ndof:
+    #     set_trace()
+    #     logging.ERROR("the shape of adapted is incorrect")
     return adapted, dimension
 
 
@@ -122,13 +98,6 @@ def get_adapted_matrix_multiq(qpoints, DictParams, num_atom, matrices):
         paras_values = paras_values[::2]
         res1 = np.round(characters @ characters.conj().T / characters.shape[1], 1)
         res2 = np.round(characters.conj().T @ characters / characters.shape[1], 1)
-        # set_trace()
-        # a = DictParams["a"]
-        # nrot = DictParams["nrot"]
-        # tmp1 = ((np.exp(1j*qp*a/2)+np.exp(-1j*qp*a/2))*np.exp(1j*(np.pi/nrot)*(-4))).conj() * ((np.exp(1j*qp*a/2)+np.exp(-1j*qp*a/2))*np.exp(1j*(np.pi/nrot)*(2))) * 4
-        # tmp2 = ((np.exp(1j*qp*a/2)+np.exp(-1j*qp*a/2))*np.exp(1j*(5*np.pi/nrot)*(-4))).conj() * ((np.exp(1j*qp*a/2)+np.exp(-1j*qp*a/2))*np.exp(1j*(5*np.pi/nrot)*(2))) * 4
-        # tmp3 = characters[0] @ characters.conj().T[:,6]
-        # tmp4 = characters[0] * characters.conj().T[:,6]
 
         ndof = 3 * num_atom
         remaining_dof = copy.deepcopy(ndof)
@@ -144,6 +113,7 @@ def get_adapted_matrix_multiq(qpoints, DictParams, num_atom, matrices):
                 # projector += chara[kk] * matrices[kk]
             # set_trace()
             num_modes = (num_modes / len(chara)).real
+
 
             if num_modes.is_integer():
                 num_modes = num_modes.astype(np.int32)
@@ -271,4 +241,9 @@ def get_freqAndeigvec_from_qp(D, DictParams, num_atom, matrices):
     tmp_band = np.array(tmp_band) * 2 * np.pi
     tmp_vec = np.array(tmp_vec)
     return np.array(tmp_band)  , np.array(tmp_vec)
+
+
+def commuting(A, B):
+    res = ((A @ B - B @ A)==0).all()
+    return res
 
