@@ -15,6 +15,7 @@ from pulgon_tools_wip.utils import (
     get_matrices,
     find_axis_center_of_nanotube,
     Cn,
+    S2n,
     brute_force_generate_group_subsquent,
 )
 from pymatgen.core.operations import SymmOp
@@ -22,17 +23,20 @@ from tqdm import tqdm
 from utilities import counting_y_from_xy, get_adapted_matrix, commuting
 import decimation
 from spglib import get_symmetry_dataset
+import ase
 
 def main():
-    path_0 = "datas/WS2/6-6-u1-3-defect-1"
+    # path_0 = "datas/WS2/6-6-u1-3-defect-1"
     # path_0 = "datas/WS2/6-6-u2-5-defect-1"
     # path_0 = "datas/carbon_nanotube/4x1-u1-3-defect-C-1"
-    # path_0 = "datas/carbon_nanotube/4x0-u1-3-defect-C-1"
+    # path_0 = "datas/carbon_nanotube/5x0-10x0-u1-3-defect-C-1"
+    path_0 = "datas/WS2-MoS2/10x0-20x0-u1-5-defect-S-1"
     path_yaml = os.path.join(path_0, "phonopy_pure.yaml")
     path_fc_continum = os.path.join(path_0, "FORCE_CONSTANTS_pure.continuum")
     path_save_phonon = os.path.join(path_0, "phonon_defect_sym_adapted")
 
     phonon = phonopy.load(phonopy_yaml=path_yaml, force_constants_filename=path_fc_continum, is_compact_fc=True)
+    # phonon = phonopy.load(phonopy_yaml=path_yaml, is_compact_fc=True)
     poscar_phonopy = phonon.primitive
     poscar_ase = Atoms(cell=poscar_phonopy.cell, positions=poscar_phonopy.positions, numbers=poscar_phonopy.numbers)
 
@@ -40,10 +44,10 @@ def main():
     aL = poscar_ase.cell[2,2]
     atom = cyclic._atom
     atom_center = find_axis_center_of_nanotube(atom)
-    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
 
-    NQS = 21
-    k_start = -np.pi + 0.1
+    NQS = 51
+    # k_start = -np.pi + 0.1
+    k_start = 0
     k_end = np.pi - 0.1
 
     path = [[[0, 0, k_start/2/np.pi], [0, 0, k_end/2/np.pi]]]
@@ -54,49 +58,62 @@ def main():
     qpoints_1dim = qpoints[:,2] * 2 * np.pi
     qpoints_1dim = qpoints_1dim / aL
 
-    # path_LR_blocks = os.path.join(path_0, "pure_fc.npz")
-    # LR_blocks = np.load(path_LR_blocks)
-    # HL = LR_blocks["H00"]
-    # TL = LR_blocks["H01"]
-    # mass_L = np.diag(np.power(ase.data.atomic_masses[poscar_ase.numbers], -1/2))
-    # unit = 1e-24 * ase.units.m**2 * ase.units.kg / ase.units.J
-    # # unit = 1
-    # HL1 = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, HL), mass_L)
-    # HL = np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, HL), mass_L)
-    # TL1 = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, TL), mass_L)
-    # TL = np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, TL), mass_L)
-    # HL1 = HL1.transpose((0, 2, 1, 3)).reshape((HL1.shape[0] * 3, -1))
-    # HL = HL.transpose((0, 2, 1, 3)).reshape((HL.shape[0] * 3, -1))
-    # TL1 = TL1.transpose((0, 2, 1, 3)).reshape((TL1.shape[0] * 3, -1))
-    # TL = TL.transpose((0, 2, 1, 3)).reshape((TL.shape[0] * 3, -1))
+
+    #################### harmonic matrix ###############
+    path_LR_blocks = os.path.join(path_0, "pure_fc.npz")
+    LR_blocks = np.load(path_LR_blocks)
+    HL = LR_blocks["H00"]
+    TL = LR_blocks["H01"]
+    mass_L = np.diag(np.power(ase.data.atomic_masses[poscar_ase.numbers], -1/2))
+    unit = 1e-24 * ase.units.m**2 * ase.units.kg / ase.units.J
+    # unit = 1
+    HL1 = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, HL), mass_L)
+    HL = np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, HL), mass_L)
+    TL1 = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, TL), mass_L)
+    TL = np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, TL), mass_L)
+    HL1 = HL1.transpose((0, 2, 1, 3)).reshape((HL1.shape[0] * 3, -1))
+    HL = HL.transpose((0, 2, 1, 3)).reshape((HL.shape[0] * 3, -1))
+    TL1 = TL1.transpose((0, 2, 1, 3)).reshape((TL1.shape[0] * 3, -1))
+    TL = TL.transpose((0, 2, 1, 3)).reshape((TL.shape[0] * 3, -1))
     # qvec = np.linspace(k_start, k_end, num=NQS)
     # omegaL, vgL = decimation.q2omega(HL1, TL1, qvec)
+    ########################################################
+
 
     ################ family 4 ##################
-    family = 4
+    # family = 4
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.get_rotational_symmetry_number()
+    # sym  = []
+    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    # sym.append(tran.affine_matrix)
+    # sym.append(rots.affine_matrix)
+    # sym.append(mirror.affine_matrix)
+    ################### family 2 #############
+    # family = 2
+    # num_irreps = 6
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.get_rotational_symmetry_number()
+    # sym = []
+    # # pg1 = obj.get_generators()  # change the order to satisfy the character table
+    # # sym.append(pg1[1])
+    # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
+    # sym.append(rots.affine_matrix)
+    ################ family 6 #####################
+    family = 6
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    nrot = obj.get_rotational_symmetry_number()
+    nrot = obj.rot_sym[0][1]
+
     sym  = []
-    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
     rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
     # sym.append(tran.affine_matrix)
     sym.append(rots.affine_matrix)
-    sym.append(mirror.affine_matrix)
+    sym.append(obj.get_generators()[1])
+    #################################################
     ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-5)
-
-    res2 = []
-    for tmp1 in order_ops:
-        res1 = []
-        for tmp2 in tmp1:
-            if tmp2!=0:
-                res1.append(tmp2+1)
-            else:
-                res1.append(tmp2)
-        res2.append(res1)
-    order_ops = res2
-    # set_trace()
-    ###############################################
     ops_car_sym = []
     for op in ops:
         tmp_sym1 = SymmOp.from_rotation_and_translation(
@@ -133,12 +150,11 @@ def main():
         distances.append(qp)
     frequencies = np.array(bands).swapaxes(0, 1) * 2 * np.pi
 
-
     fig, ax = plt.subplots()
     frequencies_raw = []
-    for ii, q in enumerate(qpoints):
-        D = phonon.get_dynamical_matrix_at_q(q)
-        # qp = qpoints_1dim[ii]
+    for ii, qp in enumerate(tqdm(qpoints_1dim)):   # loop q points
+        qz = qpoints[ii]
+        D = phonon.get_dynamical_matrix_at_q(qz)
         # D = TL.conj().transpose() * np.exp(-1j*qp*aL) + HL + TL * np.exp(1j*qp*aL)
 
         eigvals, eigvecs = np.linalg.eigh(D)
@@ -152,8 +168,7 @@ def main():
         else:
             ax.plot(distances, f_raw, color="grey")
 
-
-    #### symmetry adapted
+    #### plot adapted phonon
     color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'yellow', 'pink', 'olive', 'sage', 'slategray', 'darkkhaki', 'yellowgreen']
     # color = plt.cm.viridis(np.linspace(0, 1, len(frequencies)))
     labels = ["|m|=0","|m|=1","|m|=2","|m|=3","|m|=4","|m|=5","|m|=6","|m|=7","|m|=8","|m|=9", "|m|=10", "|m|=11","|m|=12", "|m|=13", "|m|=14"]
@@ -166,9 +181,23 @@ def main():
                 ax.plot(np.array(distances), freq, label=labels[int(abs(idx_ir-nrot+1))], color=color[int(abs(idx_ir-nrot+1))])
             else:
                 ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir-nrot+1))])
+    elif family==2:
+        for ii, freq in enumerate(frequencies):
+            idx_ir = (ii > dim_sum - 1).sum()
+            if ii in dim_sum-1 and idx_ir>=nrot/2 - 1:
+                ax.plot(np.array(distances), freq, label=labels[int(abs(idx_ir-nrot/2+1))], color=color[int(abs(idx_ir-nrot/2+1))])
+            else:
+                ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir-nrot/2+1))])
+    elif family==6:
+        for ii, freq in enumerate(frequencies):
+            idx_ir = (ii > dim_sum - 1).sum()
+            if ii in dim_sum-1:
+                ax.plot(np.array(distances), freq, label=labels[int(abs(idx_ir))], color=color[int(abs(idx_ir))])
+            else:
+                ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir))])
 
     plt.xlabel("qpoints_onedim")
-    plt.ylabel("frequencies Thz")
+    plt.ylabel("frequencies * 2 * pi (Thz)")
     plt.legend()
     plt.savefig(path_save_phonon, dpi=600)
     plt.show()

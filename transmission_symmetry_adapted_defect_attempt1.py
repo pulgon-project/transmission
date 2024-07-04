@@ -130,27 +130,27 @@ if __name__ == "__main__":
 
 
     ################### family 4 #############
-    family = 4
-    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    nrot = obj.get_rotational_symmetry_number()
-    num_irreps = nrot * 2
-    sym = []
-    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    sym.append(tran.affine_matrix)
-    rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    sym.append(rot.affine_matrix)
-    mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    sym.append(mirror.affine_matrix)
-    ################### family 2 #############
-    # family = 2
+    # family = 4
     # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     # nrot = obj.get_rotational_symmetry_number()
     # num_irreps = nrot * 2
     # sym = []
-    # # pg1 = obj.get_generators()  # change the order to satisfy the character table
-    # # sym.append(pg1[1])
-    # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
-    # sym.append(rots.affine_matrix)
+    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    # sym.append(tran.affine_matrix)
+    # rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    # sym.append(rot.affine_matrix)
+    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    # sym.append(mirror.affine_matrix)
+    ################### family 2 #############
+    family = 2
+    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    nrot = obj.get_rotational_symmetry_number()
+    num_irreps = nrot * 2
+    sym = []
+    # pg1 = obj.get_generators()  # change the order to satisfy the character table
+    # sym.append(pg1[1])
+    rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
+    sym.append(rots.affine_matrix)
     #########################################
 
     ops, order_ops = brute_force_generate_group_subsquent(sym)
@@ -164,7 +164,6 @@ if __name__ == "__main__":
         )
         ops_car_sym.append(tmp_sym)
     matrices = get_matrices(atom_center, ops_car_sym)
-
     num_atoms = len(phonon.primitive.numbers)
 
     LR_blocks = np.load(path_LR_blocks)
@@ -331,7 +330,14 @@ if __name__ == "__main__":
             # k_w = np.abs(np.angle(values[mask])) / aL
             k_w = np.arccos(values[mask].real) / aL
             k_adapteds = np.unique(k_w)
-            adapteds, dimensions = get_adapted_matrix_multiq(k_adapteds, nrot, order_ops, family, aL, num_atoms, matrices)
+
+            adapteds, dimensions = [], []
+            for qp in k_adapteds:
+                DictParams = {"qpoints": qp, "nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4, 13
+                adapted, dimension = get_adapted_matrix(DictParams, num_atoms, matrices)
+
+                adapteds.append(adapted)
+                dimensions.append(dimension)
 
         # adapted0, dim0 = get_adapted_matrix(0, nrot, order_ops, family, aL, num_atoms, matrices)
         def orthogonalize(values, vectors, adapteds, k_adapteds, dimensions):
@@ -601,7 +607,7 @@ if __name__ == "__main__":
     plt.xlabel("$\omega\;(\mathrm{rad/ps})$", fontsize=12)
     plt.ylabel(r"$T(\omega)$", fontsize=12)
 
-    plt.savefig(os.path.join(path_directory, "transmission_sym_adapted_defect.png"), dpi=600)
+    # plt.savefig(os.path.join(path_directory, "transmission_sym_adapted_defect.png"), dpi=600)
     plt.show()
 
 

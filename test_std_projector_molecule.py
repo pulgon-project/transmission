@@ -106,6 +106,7 @@ def get_perms_from_ops_mol(atoms, ops_sym, symprec=1e-2, round=4):
 
     Returns: permutation table
     """
+
     natoms = len(atoms.numbers)
     coords_scaled = atoms.get_scaled_positions()
     coords_scaled_center = np.remainder(
@@ -183,6 +184,8 @@ def get_modified_projector_of_molecular(g_rot, atom):
             dimensions.append(num_modes)
             continue
         u, s, vh = scipy.linalg.svd(projector)
+        # eigenvalues, eigenbasis = scipy.linalg.eigh(projector)
+
         error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
         if error > 0.05:
             print("the error is %s" % error)
@@ -194,6 +197,7 @@ def get_modified_projector_of_molecular(g_rot, atom):
     adapted = np.concatenate(basis, axis=1)
     if adapted.shape[0] != adapted.shape[1]:
         print("the number of eigenvector is %d" % adapted.shape[1], "%d" % adapted.shape[0] + "is required")
+        set_trace()
     return adapted, dimensions
 
 
@@ -202,6 +206,7 @@ def main():
     path_yaml = os.path.join(path_0, "phonopy_disp.yaml")
     path_fc_set = os.path.join(path_0, "FORCE_SETS")
     path_save_fc_sym = os.path.join(path_0, "fc_sym_std")
+    path_save_fc_origin = os.path.join(path_0, "fc_origin")
     path_save_fc_adapted = os.path.join(path_0, "adapted_std")
 
     atom = read_vasp(os.path.join(path_0, "H4C"))
@@ -220,7 +225,7 @@ def main():
     fc_reshape = fc.transpose(0,2,1,3).reshape(15,15)
     fc_adapted = np.abs(adapted.conj().T @ fc_reshape @ adapted)
     ##############################
-
+    np.savetxt(path_save_fc_origin, fc_reshape, fmt="%10.3f")
     np.savetxt(path_save_fc_sym, fc_adapted, fmt="%10.3f")
     np.savetxt(path_save_fc_adapted, adapted)
 

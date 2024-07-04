@@ -52,7 +52,6 @@ from ase import Atoms
 from utilities import counting_y_from_xy, get_adapted_matrix, devide_irreps, combination_paras, refine_qpoints
 
 
-
 matplotlib.rcParams["font.size"] = 16.0
 NPOINTS = 50
 

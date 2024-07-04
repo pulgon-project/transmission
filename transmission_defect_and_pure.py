@@ -487,6 +487,8 @@ if __name__ == "__main__":
     plt.plot(inc_omega, NLp, label=r"$Pure-N_{L+}$")
     plt.plot(inc_omega, trans_check, label=r"$Defect-N_{L+}$")
 
+    plt.xlabel("$\omega\;(\mathrm{rad/ps})$")
+    plt.ylabel(r"$T(\omega)$")
 
     # plt.xlim(0, max(inc_omega))
     plt.xlim(left=0.0)

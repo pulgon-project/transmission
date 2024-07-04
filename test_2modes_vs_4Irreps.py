@@ -106,29 +106,29 @@ if __name__ == "__main__":
         default=200000,
         help="maximum number of iterations in the decimation loop",
     )
-    # parser.add_argument("phonopy_file", help="phonopy yaml file")
-    # parser.add_argument("pure_fc_file", help="force constant file")
-    # parser.add_argument("scatter_fc_file", help="force constant file")
-    # parser.add_argument("defect_indices", help="force constant file")
     parser.add_argument("data_directory", help="directory")
     args = parser.parse_args()
 
     path_directory = args.data_directory
     path_phonopy_defect = os.path.join(path_directory, "phonopy_defect.yaml")
     path_phonopy_pure = os.path.join(path_directory, "phonopy_pure.yaml")
+    path_fc_continum = os.path.join(path_directory, "FORCE_CONSTANTS_pure.continuum")
+
     path_LR_blocks = os.path.join(path_directory, "pure_fc.npz")
     path_scatter_blocks = os.path.join(path_directory, "scatter_fc.npz")
     path_defect_indices = os.path.join(path_directory, "defect_indices.npz")
     path_poscar = os.path.join(path_directory, "POSCAR")
 
     ######################### projector #######################
-    phonon = phonopy.load(phonopy_yaml=path_phonopy_pure, is_compact_fc=True)
+    # phonon = phonopy.load(phonopy_yaml=path_phonopy_pure, is_compact_fc=True)
+    phonon = phonopy.load(phonopy_yaml=path_phonopy_pure, force_constants_filename=path_fc_continum, is_compact_fc=True)
+
     poscar_phonopy = phonon.primitive
     poscar_ase = Atoms(cell=poscar_phonopy.cell, positions=poscar_phonopy.positions, numbers=poscar_phonopy.numbers)
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
     atom = cyclic._primitive
     atom_center = find_axis_center_of_nanotube(atom)
-
+    num_atom = len(atom_center)
     ################ family 4 ##################
     family = 4
     num_irreps = 12
@@ -155,9 +155,6 @@ if __name__ == "__main__":
     # sym.append(rots.affine_matrix)
     #########################################
     ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-6)
-
-    # set_trace()
-
     if len(ops) != len(order_ops):
         logging.ERROR("len(ops) != len(order)")
 
@@ -205,6 +202,7 @@ if __name__ == "__main__":
 
     # HL = adapted.conj().T @ HL @ adapted
     # TL = adapted.conj().T @ TL @ adapted
+
     HR = HL.copy()
     TR = TL.copy()
 
@@ -331,7 +329,6 @@ if __name__ == "__main__":
         lo, hi = g
         if hi > lo + 1:
             values[lo:hi] = values[lo:hi].mean()
-
     # k_test = np.linspace(0, (np.pi-0.1)/aL, 10, endpoint=True)
     # adapteds_test, dimensions_test = get_adapted_matrix_multiq(k_test, nrot, order_ops, family, aL, num_atoms, matrices)
 
@@ -340,8 +337,13 @@ if __name__ == "__main__":
         # k_w = np.abs(np.angle(values[mask])) / aL
         k_w = np.arccos(values[mask].real) / aL
         k_adapteds = np.unique(k_w)
-        DictParams = {"nrot": nrot, "order": order_ops, "family": family, "a": aL}
-        adapteds, dimensions = get_adapted_matrix_multiq(k_adapteds, DictParams, num_atoms, matrices)
+
+        adapteds, dimensions = [], []
+        for qp in k_adapteds:
+            DictParams = {"qpoints":qp,  "nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4, 13
+            adapted, dimension = get_adapted_matrix(DictParams, num_atom, matrices)
+            adapteds.append(adapted)
+            dimensions.append(dimension)
 
     def orthogonalize(values, vectors, adapteds, k_adapteds, dimensions):
         mask = np.isclose(np.abs(values), 1.0, args.rtol, args.atol)
@@ -383,7 +385,7 @@ if __name__ == "__main__":
 
             # k_w_group = np.abs(np.angle(values[m][0])) / aL
             k_w_group = np.arccos(values[m].real)[0] / aL
-            # print("k_w_group: ", k_w_group)
+
             try:
                 k_w_group_indice = np.where(np.isclose(k_w_group, k_adapteds))[0].item()
             except:

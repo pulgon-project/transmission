@@ -40,27 +40,28 @@ def get_adapted_matrix(DictParams, num_atom, matrices):
     characters, paras_values, paras_symbols = get_character(
         DictParams
     )
-    if characters.ndim ==2:
-        d_mu = 1
-    else:
-        d_mu = characters.shape[-1]
 
     ndof = 3 * num_atom
     adapted = []
     dimension = []
     for ii, chara in enumerate(characters):  # loop IR
+        if chara.ndim ==1:
+            IR_ndim = 1
+        else:
+            IR_ndim = chara.shape[-1]
+
         num_modes = 0
         projector = np.zeros((ndof, ndof), dtype=np.complex128)
         for kk in range(len(chara)):  # loop ops
-            if d_mu==1:
+            if IR_ndim==1:
                 chara_conj = chara[kk].conj()
             else:
                 chara_conj = chara[kk].conj().trace()
             num_modes += chara_conj * matrices[kk].trace()
             projector += chara_conj * matrices[kk]
-
-        projector = d_mu * projector / len(chara)
+        projector = IR_ndim * projector / len(chara)
         num_modes = (num_modes / len(chara)).real
+        # num_modes = projector.trace().real
         if num_modes.is_integer():
             num_modes = num_modes.astype(np.int32)
         else:
@@ -70,7 +71,9 @@ def get_adapted_matrix(DictParams, num_atom, matrices):
         u, s, vh = scipy.linalg.svd(projector)
         basis = u[:,:num_modes]
         error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
-        # set_trace()
+        # if error>0.05:
+        #     print("error: ", error)
+        #     set_trace()
 
         dimension.append(basis.shape[1])
         adapted.append(basis)
@@ -113,7 +116,6 @@ def get_adapted_matrix_multiq(qpoints, DictParams, num_atom, matrices):
                 # projector += chara[kk] * matrices[kk]
             # set_trace()
             num_modes = (num_modes / len(chara)).real
-
 
             if num_modes.is_integer():
                 num_modes = num_modes.astype(np.int32)
