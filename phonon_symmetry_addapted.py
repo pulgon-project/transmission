@@ -24,16 +24,26 @@ from utilities import counting_y_from_xy, get_adapted_matrix, commuting
 import decimation
 from spglib import get_symmetry_dataset
 import ase
+import argparse
+
 
 def main():
-    # path_0 = "datas/WS2/6-6-u1-3-defect-1"
-    # path_0 = "datas/WS2/6-6-u2-5-defect-1"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("data_directory", help="directory")
+    args = parser.parse_args()
+    path_0 = args.data_directory
+
+    # path_0 = "datas/WS2-MoS2_NNFF-epoch2000-1/6x6-u1-3-WMo-S12-1"
+    path_0 = "datas/WS2-MoS2_NNFF-epoch2000-1/10x0-u1-3-WMo-C1-1"
     # path_0 = "datas/carbon_nanotube/4x1-u1-3-defect-C-1"
-    # path_0 = "datas/carbon_nanotube/5x0-10x0-u1-3-defect-C-1"
-    path_0 = "datas/WS2-MoS2/10x0-20x0-u1-5-defect-S-1"
+    # path_0 = "datas/carbon_nanotube/5x0-10x0-u1-3-defect-C5v-1"
+    # path_0 = "datas/WS2-MoS2/10x0-20x0-u1-5-defect-S-1"
+    # path_0 = "datas/WS2-MoS2/10x0-20x0-u1-5-defect-S-C10v-3"
+
     path_yaml = os.path.join(path_0, "phonopy_pure.yaml")
     path_fc_continum = os.path.join(path_0, "FORCE_CONSTANTS_pure.continuum")
     path_save_phonon = os.path.join(path_0, "phonon_defect_sym_adapted")
+    path_savedata = os.path.join(path_0, "sym-adapted-phonon")
 
     phonon = phonopy.load(phonopy_yaml=path_yaml, force_constants_filename=path_fc_continum, is_compact_fc=True)
     # phonon = phonopy.load(phonopy_yaml=path_yaml, is_compact_fc=True)
@@ -46,9 +56,8 @@ def main():
     atom_center = find_axis_center_of_nanotube(atom)
 
     NQS = 51
-    # k_start = -np.pi + 0.1
-    k_start = 0
-    k_end = np.pi - 0.1
+    k_start = -np.pi
+    k_end = np.pi
 
     path = [[[0, 0, k_start/2/np.pi], [0, 0, k_end/2/np.pi]]]
     qpoints, connections = get_band_qpoints_and_path_connections(
@@ -56,29 +65,10 @@ def main():
     )
     qpoints = qpoints[0]
     qpoints_1dim = qpoints[:,2] * 2 * np.pi
+
     qpoints_1dim = qpoints_1dim / aL
-
-
-    #################### harmonic matrix ###############
-    path_LR_blocks = os.path.join(path_0, "pure_fc.npz")
-    LR_blocks = np.load(path_LR_blocks)
-    HL = LR_blocks["H00"]
-    TL = LR_blocks["H01"]
-    mass_L = np.diag(np.power(ase.data.atomic_masses[poscar_ase.numbers], -1/2))
-    unit = 1e-24 * ase.units.m**2 * ase.units.kg / ase.units.J
-    # unit = 1
-    HL1 = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, HL), mass_L)
-    HL = np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, HL), mass_L)
-    TL1 = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, TL), mass_L)
-    TL = np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, TL), mass_L)
-    HL1 = HL1.transpose((0, 2, 1, 3)).reshape((HL1.shape[0] * 3, -1))
-    HL = HL.transpose((0, 2, 1, 3)).reshape((HL.shape[0] * 3, -1))
-    TL1 = TL1.transpose((0, 2, 1, 3)).reshape((TL1.shape[0] * 3, -1))
-    TL = TL.transpose((0, 2, 1, 3)).reshape((TL.shape[0] * 3, -1))
-    # qvec = np.linspace(k_start, k_end, num=NQS)
-    # omegaL, vgL = decimation.q2omega(HL1, TL1, qvec)
-    ########################################################
-
+    # qpoints_1dim = qpoints_1dim[[25, 0]]
+    # qpoints_1dim = qpoints_1dim[[4, 25]]
 
     ################ family 4 ##################
     # family = 4
@@ -87,11 +77,22 @@ def main():
     # sym  = []
     # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
     # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    # mirror = SymmOp.reflection([0,0,1], [0,0,0.5])
     # sym.append(tran.affine_matrix)
     # sym.append(rots.affine_matrix)
     # sym.append(mirror.affine_matrix)
-    ################### family 2 #############
+    ################ family 8 ##################
+    family = 8
+    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    nrot = obj.get_rotational_symmetry_number()
+    sym  = []
+    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    mirror = SymmOp.reflection([1,0,0], [0,0,0])
+    sym.append(tran.affine_matrix)
+    sym.append(rots.affine_matrix)
+    sym.append(mirror.affine_matrix)
+    ################### family 2 ###################
     # family = 2
     # num_irreps = 6
     # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
@@ -101,19 +102,19 @@ def main():
     # # sym.append(pg1[1])
     # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
     # sym.append(rots.affine_matrix)
-    ################ family 6 #####################
-    family = 6
-    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    nrot = obj.rot_sym[0][1]
-
-    sym  = []
-    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    # sym.append(tran.affine_matrix)
-    sym.append(rots.affine_matrix)
-    sym.append(obj.get_generators()[1])
+    ################ family 6 ######################
+    # family = 6
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.rot_sym[0][1]
+    # sym  = []
+    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    # # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    # # sym.append(tran.affine_matrix)
+    # sym.append(rots.affine_matrix)
+    # sym.append(obj.get_generators()[1])
     #################################################
-    ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-5)
+    ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-2)
+
     ops_car_sym = []
     for op in ops:
         tmp_sym1 = SymmOp.from_rotation_and_translation(
@@ -127,8 +128,8 @@ def main():
     for ii, qp in enumerate(tqdm(qpoints_1dim)):   # loop q points
         DictParams = {"qpoints":qp,  "nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4, 13
         adapted, dimensions = get_adapted_matrix(DictParams, num_atom, matrices)
-        qz = qpoints[ii]
 
+        qz = qpoints[ii]
         D = phonon.get_dynamical_matrix_at_q(qz)
         # D = TL.conj().transpose() * np.exp(-1j*qp*aL) + HL + TL * np.exp(1j*qp*aL)
         D = adapted.conj().T @ D @ adapted
@@ -195,12 +196,21 @@ def main():
                 ax.plot(np.array(distances), freq, label=labels[int(abs(idx_ir))], color=color[int(abs(idx_ir))])
             else:
                 ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir))])
+    elif family==8:
+        for ii, freq in enumerate(frequencies):
+            idx_ir = (ii > dim_sum - 1).sum()
+            if ii in dim_sum-1:
+                ax.plot(np.array(distances), freq, label=labels[int(abs(idx_ir))], color=color[int(abs(idx_ir))])
+            else:
+                ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir))])
+    np.savez(path_savedata, distances=np.array(distances), frequencies=frequencies, dim_sum=dim_sum)
 
     plt.xlabel("qpoints_onedim")
     plt.ylabel("frequencies * 2 * pi (Thz)")
     plt.legend()
-    plt.savefig(path_save_phonon, dpi=600)
+    # plt.savefig(path_save_phonon, dpi=600)
     plt.show()
+
 
 if __name__ == "__main__":
     main()

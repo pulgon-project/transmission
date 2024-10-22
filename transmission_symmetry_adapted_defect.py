@@ -17,6 +17,7 @@ import sys
 import os.path
 import copy
 import argparse
+import time
 
 import tqdm
 import numpy as np
@@ -28,6 +29,7 @@ import ase.data
 import matplotlib
 import matplotlib.pyplot as plt
 import phonopy
+from ase.io.vasp import write_vasp
 
 import decimation
 from ipdb import set_trace
@@ -38,6 +40,7 @@ from pulgon_tools_wip.utils import (
     find_axis_center_of_nanotube,
     dimino_affine_matrix_and_subsquent,
     Cn,
+    S2n,
     sigmaH,
     brute_force_generate_group_subsquent,
 )
@@ -49,12 +52,12 @@ from phonopy.units import VaspToTHz
 from pymatgen.core.operations import SymmOp
 import logging
 from ase import Atoms
-from utilities import counting_y_from_xy, get_adapted_matrix, devide_irreps, combination_paras, refine_qpoints
+from utilities import counting_y_from_xy, get_adapted_matrix, divide_irreps, divide_over_irreps, get_adapted_matrix_multiq
+import matplotlib.colors as mcolors
 
 
 matplotlib.rcParams["font.size"] = 16.0
-NPOINTS = 50
-
+NPOINTS = 6
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -71,25 +74,33 @@ if __name__ == "__main__":
         "-t1",
         "--rtol",
         type=float,
-        default=1e-3,
+        default=1e-4,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
-        " it a propagating mode",
+             " it a propagating mode",
     )
     parser.add_argument(
         "-t2",
         "--atol",
         type=float,
-        default=4e-3,
+        default=1e-3,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
-        " it a propagating mode",
+             " it a propagating mode",
     )
     parser.add_argument(
         "-t3",
+        "--mtol",
+        type=float,
+        default=1e-2,
+        help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
+             " it a propagating mode",
+    )
+    parser.add_argument(
+        "-t4",
         "--means_tol",
         type=float,
-        default=7e-1,
+        default=1e-2,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
-        " it a propagating mode",
+             " it a propagating mode",
     )
     parser.add_argument(
         "-d",
@@ -112,56 +123,82 @@ if __name__ == "__main__":
     parser.add_argument("data_directory", help="directory")
     args = parser.parse_args()
 
+    print("*******************")
+    rcond = 0.5
+    print("rcond =", rcond)
+    print("*******************")
+
+    t0 = time.time()
+
     path_directory = args.data_directory
     path_phonopy_defect = os.path.join(path_directory, "phonopy_defect.yaml")
     path_phonopy_pure = os.path.join(path_directory, "phonopy_pure.yaml")
     path_LR_blocks = os.path.join(path_directory, "pure_fc.npz")
+    path_fc_continum = os.path.join(path_directory, "FORCE_CONSTANTS_pure.continuum")
+
     path_scatter_blocks = os.path.join(path_directory, "scatter_fc.npz")
     path_defect_indices = os.path.join(path_directory, "defect_indices.npz")
     path_poscar = os.path.join(path_directory, "POSCAR")
+    path_savedata = os.path.join(path_directory, "transmission_irreps.npz")
 
-    ######################### projector
-    phonon = phonopy.load(phonopy_yaml=path_phonopy_pure, is_compact_fc=True)
-
+    ######################### projector ##########################
+    # phonon = phonopy.load(phonopy_yaml=path_phonopy_pure, is_compact_fc=True)
+    phonon = phonopy.load(phonopy_yaml=path_phonopy_pure, force_constants_filename=path_fc_continum, is_compact_fc=True)
     poscar_phonopy = phonon.primitive
     poscar_ase = Atoms(cell=poscar_phonopy.cell, positions=poscar_phonopy.positions, numbers=poscar_phonopy.numbers)
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
-    atom = cyclic._primitive
+    # atom = cyclic._primitive
+    atom = poscar_ase
     atom_center = find_axis_center_of_nanotube(atom)
 
-    k_start = -np.pi
-    k_end = np.pi
-
-    path = [[[0, 0, k_start/2/np.pi], [0, 0, k_end/2/np.pi]]]
-    qpoints, connections = get_band_qpoints_and_path_connections(
-        path, npoints=NPOINTS
-    )
-    qpoints = qpoints[0]
-
-    qpoints_1dim = np.linspace(k_start, k_end, num=NPOINTS, endpoint=k_end)
-    a = cyclic._pure_trans
-    qpoints_1dim = qpoints_1dim / a
-
-    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    nrot = obj.get_rotational_symmetry_number()
-
-    sym = []
-    # tran = SymmOp.from_rotation_and_translation(np.eye(3), [0, 0, 1])
-    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    # pg1 = obj.get_generators()    # change the order to satisfy the character table
-    # sym.append(pg1[1])
-    S12 = np.array([[0.8660254, -0.5, 0., 0.],
-                    [0.5, 0.8660254, 0., 0.],
-                    [0., 0., -1., 0.],
-                    [0., 0., 0., 1.]])
-    sym.append(S12)
-    # set_trace()
+    ################### family 4 #####################
+    # family = 4
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.get_rotational_symmetry_number()
+    # num_irreps = nrot * 2
+    # sym = []
+    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    # sym.append(tran.affine_matrix)
+    # rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    # sym.append(rot.affine_matrix)
     # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
     # sym.append(mirror.affine_matrix)
-
-
-    ops, order = brute_force_generate_group_subsquent(sym)
-    if len(ops) != len(order):
+    ################ family 8 ##################
+    family = 8
+    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    nrot = obj.get_rotational_symmetry_number()
+    sym  = []
+    num_irreps = nrot + 1
+    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/4])
+    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    mirror = SymmOp.reflection([1,0,0], [0,0,0])
+    sym.append(tran.affine_matrix)
+    sym.append(rots.affine_matrix)
+    sym.append(mirror.affine_matrix)
+    ################### family 2 ###############
+    # family = 2
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.get_rotational_symmetry_number()
+    # num_irreps = nrot * 2
+    # sym = []
+    # # pg1 = obj.get_generators()  # change the order to satisfy the character table
+    # # sym.append(pg1[1])
+    # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
+    # sym.append(rots.affine_matrix)
+    ############################################
+    ################## family 6 ########################
+    # family = 6
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.rot_sym[0][1]
+    # num_irreps = int(nrot/2)+1
+    # sym  = []
+    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    # sym.append(rots.affine_matrix)
+    # sym.append(obj.get_generators()[1])
+    ##############################################
+    ops, order_ops = brute_force_generate_group_subsquent(sym)
+    if len(ops) != len(order_ops):
         logging.ERROR("len(ops) != len(order)")
 
     ops_car_sym = []
@@ -172,10 +209,7 @@ if __name__ == "__main__":
         ops_car_sym.append(tmp_sym)
     matrices = get_matrices(atom_center, ops_car_sym)
 
-    # set_trace()
-
     num_atoms = len(phonon.primitive.numbers)
-
     LR_blocks = np.load(path_LR_blocks)
     scatter_blocks = np.load(path_scatter_blocks)
     defect_indices = np.load(path_defect_indices)["defect_indices"]
@@ -189,18 +223,18 @@ if __name__ == "__main__":
     VCR = scatter_blocks["Vcr"]
 
     cells = max(defect_indices) + 1
-    idx_scatter = np.where(defect_indices==int((cells-1)/2))[0]
+    idx_scatter = np.where(defect_indices == int((cells - 1) / 2))[0]
 
-    mass_C = np.diag(np.power(ase.data.atomic_masses[phonon_defect.primitive.numbers[idx_scatter]], -1/2))
-    mass_L = np.diag(np.power(ase.data.atomic_masses[poscar.numbers], -1/2))
+    mass_C = np.diag(np.power(ase.data.atomic_masses[phonon_defect.primitive.numbers[idx_scatter]], -1 / 2))
+    mass_L = np.diag(np.power(ase.data.atomic_masses[poscar.numbers], -1 / 2))
     mass_R = mass_L.copy()
-    unit = 1e-24 * ase.units.m**2 * ase.units.kg / ase.units.J
+    unit = 1e-24 * ase.units.m ** 2 * ase.units.kg / ase.units.J
 
-    HL = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, HL), mass_L)
-    TL = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, TL), mass_L)
-    KC = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_C, KC), mass_C)
-    VLC = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_L, VLC), mass_C)
-    VCR = unit * np.einsum('ijlm,jk->iklm',np.einsum('ij,jkln->ikln',mass_C, VCR), mass_R)
+    HL = unit * np.einsum('ijlm,jk->iklm', np.einsum('ij,jkln->ikln', mass_L, HL), mass_L)
+    TL = unit * np.einsum('ijlm,jk->iklm', np.einsum('ij,jkln->ikln', mass_L, TL), mass_L)
+    KC = unit * np.einsum('ijlm,jk->iklm', np.einsum('ij,jkln->ikln', mass_C, KC), mass_C)
+    VLC = unit * np.einsum('ijlm,jk->iklm', np.einsum('ij,jkln->ikln', mass_L, VLC), mass_C)
+    VCR = unit * np.einsum('ijlm,jk->iklm', np.einsum('ij,jkln->ikln', mass_C, VCR), mass_R)
 
     HL = HL.transpose((0, 2, 1, 3)).reshape((HL.shape[0] * 3, -1))
     TL = TL.transpose((0, 2, 1, 3)).reshape((TL.shape[0] * 3, -1))
@@ -208,42 +242,54 @@ if __name__ == "__main__":
     VLC = VLC.transpose((0, 2, 1, 3)).reshape((VLC.shape[0] * 3, -1))
     VCR = VCR.transpose((0, 2, 1, 3)).reshape((VCR.shape[0] * 3, -1))
 
-    # HL = adapted.conj().T @ HL @ adapted
-    # TL = adapted.conj().T @ TL @ adapted
     HR = HL.copy()
     TR = TL.copy()
-
     aL = phonon.primitive.cell[2, 2]
     aR = aL
 
     # Plot the phonon spectra of both bulk leads.
     # qvec = np.linspace(0.0, 2.0 * np.pi, num=1001)
-    qvec = np.linspace(-np.pi, np.pi, num=NPOINTS)
+    qvec = np.linspace(-np.pi, np.pi, num=NPOINTS*10)
     omegaL, vgL = decimation.q2omega(HL, TL, qvec)
     # Compute all the parameters of the interface
-    inc_omega = np.linspace(1e-1, omegaL.max() * 1.01, num=NPOINTS, endpoint=True)
+    # inc_omega = np.linspace(1e-1, omegaL.max() * 1.01, num=NPOINTS, endpoint=True)
+    inc_omega = np.linspace(15, 20, num=50, endpoint=True)
+
+
+    # inc_omega = np.linspace(70.31088469894658, 100, num=2, endpoint=True)
+
 
     trans = np.zeros_like(inc_omega)
     trans_check = np.zeros_like(inc_omega)
-    # NLp = np.empty_like(inc_omega)
-    # NRp = np.empty_like(inc_omega)
-    # NLm = np.empty_like(inc_omega)
-    # NRm = np.empty_like(inc_omega)
+
+    NLp = np.empty_like(inc_omega)
+    NRp = np.empty_like(inc_omega)
+    NLm = np.empty_like(inc_omega)
+    NRm = np.empty_like(inc_omega)
+
+    t1 = time.time()
+    print("Load data: %s" % (t1 - t0))
 
     HL_complex = HL.astype(complex)
     TL_complex = TL.astype(complex)
     HR_complex = HR.astype(complex)
     TR_complex = TR.astype(complex)
     matrices_prob, Irreps = [], []
-    NLp_irreps = np.zeros((6, NPOINTS))   # the number of im
+    NLp_irreps = np.zeros((num_irreps, NPOINTS))  # the number of im
     for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
-        # omega=56.77013783915039
+        iomega, omega = 0, 15.846153846153847
+
+        print("---------------------")
+        print("omega=", omega)
+
+        t0 = time.time()
 
         en = omega * (omega + 1.0j * args.eps)
         # Build the four retarded GFs of leads extending left or right.
         inv_gLretm = decimation.inv_g00(
             HL_complex, TL_complex, omega, args.eps, args.decimation, args.maxiter
         )
+
         inv_gLretp = decimation.inv_g00(
             HL_complex,
             TL_complex.conj().T,
@@ -306,56 +352,92 @@ if __name__ == "__main__":
         GLRret = Gret[: HL_pr.shape[0], -HR_pr.shape[1]:]
         GRLret = Gret[-HR_pr.shape[0]:, : HL_pr.shape[1]]
 
-
         trans[iomega] = np.trace(
             GRLret @ (GRLret @ GammaL.conj().T).conj().T @ GammaR
         ).real
 
-        def orthogonalize(values, vectors):
-            modules = np.abs(values)
-            phases = np.angle(values)
-            order = np.argsort(-modules)
-            values = np.copy(values[order])
-            vectors = np.copy(vectors[:, order])
+        print(trans[iomega])
+        t1 = time.time()
+        print("The time of G matrix: %s" % (t1-t0))
+        def orthogonalize(values, vectors, DictParams, k_adapteds, adapteds, dimensions):
+            mask = np.isclose(np.abs(values), 1.0, args.rtol, args.mtol)
+
+            order_val = np.lexsort((np.arccos(values.real), 1 * (~mask)))
+            # order_val = np.lexsort((np.angle(values), 1 * (~mask)))
+            values = values[order_val]
+            vectors = vectors[:, order_val]
+
             lo = 0
             hi = 1
             groups = []
             while True:
-                if hi >= vectors.shape[1] or not np.isclose(
-                        np.angle(values[hi]) , np.angle(values[hi-1]) , rtol=args.rtol, atol=args.atol,
+                if hi >= mask.sum() or not np.isclose(
+                # np.angle(values[hi]) / aL, np.angle(values[hi - 1]) / aL, rtol=args.rtol, atol=args.atol,
+                np.arccos(values[hi].real) / aL, np.arccos(values[hi - 1].real) / aL, rtol=args.rtol, atol=args.atol,
                 ):
                     groups.append((lo, hi))
                     lo = hi
-                if hi >= vectors.shape[1]:
+                if hi >= mask.sum():
                     break
                 hi += 1
             for g in groups:
                 lo, hi = g
                 if hi > lo + 1:
                     values[lo:hi] = values[lo:hi].mean()
-                    vectors[:, lo:hi] = la.orth(vectors[:, lo:hi], rcond=1e-3)
-            return values, vectors
+                    vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
 
-        # Solve the corresponding eigenvalue equations for the leads.
-        # Look for degenerate modes and orthonormalize them.
-        ALretp, ULretp = orthogonalize(*la.eig(FLretp))
-        ARretp, URretp = orthogonalize(*la.eig(FRretp))
-        ALadvp, ULadvp = orthogonalize(*la.eig(FLadvp))
-        ARadvp, URadvp = orthogonalize(*la.eig(FRadvp))
-        ALretm, ULretm = orthogonalize(*la.eig(inv_FLretm))
-        ARretm, URretm = orthogonalize(*la.eig(inv_FRretm))
-        ALadvm, ULadvm = orthogonalize(*la.eig(inv_FLadvm))
-        ARadvm, URadvm = orthogonalize(*la.eig(inv_FRadvm))
+            irreps = []
+            for g in groups:
+                lo, hi = g
+                k_w_group = np.arccos(values[lo].real) / aL
+                # k_w_group = np.angle(values[lo]) / aL
+                DictParams["qpoints"] = k_w_group
 
-        # Find out which modes are propagating.
-        mask_Lretp = np.isclose(np.abs(ALretp), 1.0, args.rtol)
-        mask_Rretp = np.isclose(np.abs(ARretp), 1.0, args.rtol)
-        mask_Ladvp = np.isclose(np.abs(ALadvp), 1.0, args.rtol)
-        mask_Radvp = np.isclose(np.abs(ARadvp), 1.0, args.rtol)
-        mask_Lretm = np.isclose(np.abs(ALretm), 1.0, args.rtol)
-        mask_Rretm = np.isclose(np.abs(ARretm), 1.0, args.rtol)
-        mask_Ladvm = np.isclose(np.abs(ALadvm), 1.0, args.rtol)
-        mask_Radvm = np.isclose(np.abs(ARadvm), 1.0, args.rtol)
+                if k_w_group in k_adapteds:
+                    itp = k_adapteds.index(k_w_group)
+                    basis, dims = adapteds[itp], dimensions[itp]
+                else:
+                    basis, dims = get_adapted_matrix(DictParams, num_atoms, matrices)
+                    k_adapteds.append(k_w_group)
+                    adapteds.append(basis)
+                    dimensions.append(dims)
+
+                group_vectors = vectors[:, lo:hi]
+                try:
+                    adapted_vecs = divide_over_irreps(group_vectors, basis, dims, rcond=rcond)
+                except Exception as e:
+                    print("k_w_group:", k_w_group)
+                    print(e)
+                    # set_trace()
+                    continue
+                tmp_vec = []
+                for i_ir, v in enumerate(adapted_vecs):
+                    if v.shape[1] > 0:
+                        tmp_vec.append(v)
+                        irreps.extend(np.repeat(i_ir, v.shape[1]))
+                        # print(f"\t- {v.shape[1]} modes in irrep #{i_ir+1}")
+                tmp_vec = np.concatenate(tmp_vec, axis=1)
+                vectors[:, lo:hi] = tmp_vec
+            return values, vectors, mask, irreps, k_adapteds, adapteds, dimensions
+
+        # # Solve the corresponding eigenvalue equations for the leads.
+        # # Look for degenerate modes and orthonormalize them.
+        DictParams = {"nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4, 13
+
+        k_adapteds, adapteds, dimensions = [], [], []
+        ALadvm, ULadvm, mask_Ladvm, tmp_irreps, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLadvm), DictParams, k_adapteds, adapteds, dimensions)
+
+        set_trace()
+        ALretm, ULretm, mask_Lretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLretm), DictParams, k_adapteds, adapteds, dimensions)
+        ARretm, URretm, mask_Rretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRretm), DictParams, k_adapteds, adapteds, dimensions)
+        ARadvm, URadvm, mask_Radvm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRadvm), DictParams, k_adapteds, adapteds, dimensions)
+        ALretp, ULretp, mask_Lretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLretp), DictParams, k_adapteds, adapteds, dimensions)
+        ARretp, URretp, mask_Rretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRretp), DictParams, k_adapteds, adapteds, dimensions)
+        ALadvp, ULadvp, mask_Ladvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLadvp), DictParams, k_adapteds, adapteds, dimensions)
+        ARadvp, URadvp, mask_Radvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRadvp), DictParams, k_adapteds, adapteds, dimensions)
+
+        t2 = time.time()
+        print("The orthogonalization process: %s" % (t2-t1))
 
         # Compute the group velocity matrices.
         # yapf: disable
@@ -409,6 +491,7 @@ if __name__ == "__main__":
         VLadvm = refine(VLadvm, mask_Ladvm)
         VRadvm = refine(VRadvm, mask_Radvm)
 
+
         # Set up auxiliary diagonal matrices with elements that are either
         # inverse of the previous diagonals or zero.
         def build_tilde(V):
@@ -438,6 +521,14 @@ if __name__ == "__main__":
         ILadvm = VLadvm @ VLadvm_tilde
         IRadvm = VRadvm @ VRadvm_tilde
 
+        # Compute the number of right-propagating and left-propagating
+        # channels, and perform a small sanity check.
+        NLp[iomega] = np.trace(ILretp).real
+        NRp[iomega] = np.trace(IRretp).real
+        NLm[iomega] = np.trace(ILretm).real
+        NRm[iomega] = np.trace(IRretm).real
+
+
         VRretp12 = np.sqrt(VRretp)
         VLadvm12 = np.sqrt(VLadvm)
         VLretm12 = np.sqrt(VLretm)
@@ -464,186 +555,46 @@ if __name__ == "__main__":
                 )
         )
 
-        # Compute the matrices required for the transmission of the complete
-        # system.
-        QL = (
-                en * np.eye(HL.shape[0], dtype=np.complex128)
-                - HL
-                - TL.conj().T @ la.solve(inv_gLretm, TL)
-                - TL @ la.solve(inv_gLretp, TL.conj().T)
-        )
-        QR = (
-                en * np.eye(HR.shape[0], dtype=np.complex128)
-                - HR
-                - TR.conj().T @ la.solve(inv_gRretm, TR)
-                - TR @ la.solve(inv_gRretp, TR.conj().T)
-        )
-
         #  Discard evanescent modes.
         tRL = tRL[mask_Rretp, :][:, mask_Ladvm]
-        trans_modes = np.diag(tRL.conj().T @ tRL)
+        trans_modes = np.diag(tRL.conj().T @ tRL).real
+        trans_check[iomega] = trans_modes.sum()
 
-        # tRL2 = tRL[mask_Rretp, :][:, mask_Ladvm][:2,:2]
-        # trans_modes2 = np.diag(tRL2.conj().T @ tRL2)
-        trans_check[iomega] = trans_modes.sum().real
-
-        eigvec_modes = ULadvm[:,mask_Ladvm]
-        if eigvec_modes.ndim>1:
-            eigvec_modes = eigvec_modes.T
-        print("---------- -----------")
-        print("omega=", omega)
-        k_w = np.abs(np.angle(ALadvm[mask_Ladvm]) /aL)
-
-        # set_trace()
-        # k_w, order_q = refine_qpoints(k_w, tol=1e-4)
-        # eigvec_modes = eigvec_modes[order_q]
-        # tRL = tRL[order_q, :][:, order_q]
-        # k_w = np.arccos(ALadvm[mask_Ladvm].real) / aL
-        # k_w = np.angle(ALadvm[mask_Ladvm].real) / aL
-
-        k_w_unique = np.unique(k_w)
-        print("k_w: ", k_w)
-        print("k_w_unique: ", k_w_unique)
-        # trs1 = np.diag(tRL.conj().T @ tRL).real
-        # trs2 = np.abs(np.diag(tRL.conj().T @ tRL))
-        tmp_transmission_prob, tmp_irreps, tmp_idx = [], [], []
-        for ik, tmp_k in enumerate(k_w_unique):
-            print("k=", tmp_k)
-            # if np.isclose(tmp_k, 0.765102065473848) and np.isclose(omega, 20.387072865742017):
-            #     set_trace()
-            adapted, dimensions = get_adapted_matrix([tmp_k], nrot, order, 2, aL, num_atoms, matrices)
-
-            itp1 = (k_w==tmp_k)
-            itp2 = np.where(k_w==tmp_k)[0]
-            num_mode = itp1.sum()
-            if num_mode==1:       # non-degenerated q
-                tmp_idx.extend(itp2)
-                vec = eigvec_modes[itp2.item()]
-                itp3 = devide_irreps(vec,adapted,dimensions)
-                itp4 = np.where(itp3>args.means_tol)[0]
-                if len(itp4)!=1:     # correspond to more than one Irreps, it means it should be degenerated with the next q
-                    k_w[itp2] = k_w_unique[ik + 1]
-                else:
-                    tmp_irreps.extend(itp4)
-                    probabilities = trans_modes[itp2].real
-                    tmp_transmission_prob.extend(probabilities)
-            else:             # degenerated q
-                tmp_idx.extend(itp2)
-                vectors = eigvec_modes[itp2]
-                
-                means = (devide_irreps(vectors, adapted, dimensions)>args.means_tol)
-                means_unique = np.unique(means,axis=0)
-                if means_unique.shape[0]==1:           # degenerated q correspond to the same Irreps basis
-                    irps, paras, _ = combination_paras(vectors, adapted, means, dimensions, tol=args.means_tol)
-                    paras_abs = np.abs(paras) ** 2
-
-                    probabilities = trans_modes[itp2].real  @ paras_abs
-                    tmp_irreps.extend(irps)
-                    tmp_transmission_prob.extend(probabilities)
-                    if len(irps) != len(probabilities):
-                        if (len(probabilities)-len(irps))==1:
-                            paras_abs = np.vstack((paras_abs, paras_last))
-                            paras_last = (1 - paras_abs.sum(axis=0))
-
-                            irps_last = \
-                            np.where(devide_irreps(paras_last @ vectors, adapted, dimensions) > args.means_tol)[0]
-                            tmp_irreps.extend(irps_last)
-                            probabilities_last = paras_last @ trans_modes[itp2].real
-                            tmp_transmission_prob.extend(probabilities_last)
-                        else:
-                            set_trace()
-                            logging.Error("the num of irps and probability not equal")
-                else:                # degenerated q correspond to the different Irreps basis, separate these q based on Irreps basis
-                    for mea in means_unique:
-                        tmp1 = (means==mea).all(axis=1) 
-                        tmp_itp = np.where(tmp1)[0]
-                        if len(tmp_itp)==1:
-                            tmp_irreps.extend(np.where(means[tmp_itp].flatten())[0])
-                            probabilities = trans_modes[itp2][tmp_itp].real
-                            if len(np.where(means[tmp_itp].flatten())[0]) != len(probabilities):
-                                set_trace()
-                                logging.Error("one mode correspond to lots of probabilities")
-                            tmp_transmission_prob.append(probabilities.item())
-                        else:
-                            irps, paras, _ = combination_paras(vectors[tmp_itp], adapted, means[tmp_itp], dimensions, tol=args.means_tol)
-
-                            tmp_irreps.extend(irps)
-                            if paras.ndim ==1:
-                                probabilities = trans_modes[itp2][tmp_itp].real
-                            else:
-                                probabilities = trans_modes[itp2][tmp_itp].real @ (np.abs(paras)**2)
-                            tmp_transmission_prob.extend(probabilities)
-
-                            if len(irps) != len(probabilities):
-                                if (len(probabilities)-len(irps))==1:
-                                    paras_abs = np.abs(paras) ** 2
-                                    paras_last = (1 - paras_abs.sum(axis=0))
-                                    paras_abs = np.vstack((paras_abs, paras_last))
-
-                                    irps_last = \
-                                        np.where(
-                                            devide_irreps(paras_last @ vectors, adapted, dimensions) > args.means_tol)[
-                                            0]
-                                    probabilities_last = irps_last @ trans_modes[itp2][tmp_itp].real
-                                    tmp_irreps.extend(irps_last)
-                                    tmp_transmission_prob.extend(probabilities_last)
-                                else:
-                                    set_trace()
-                                    logging.Error("number of modes - num of Irreps > 1")
-
-        matrices_prob.append(np.diag(tmp_transmission_prob))
-        Irreps.append(np.array(tmp_irreps) - 2)
-        for im, tras in enumerate(tmp_transmission_prob):
+        matrices_prob.append(np.diag(trans_modes))
+        for im, tras in enumerate(trans_modes):
             try:
                 NLp_irreps[tmp_irreps[im], iomega] += tras
             except:
+
                 set_trace()
+                print("NLp_irreps.shape=", NLp_irreps.shape)
+                print("iomega=", iomega)
+                print("tmp_irreps.shape", tmp_irreps.shape)
+                print("im=", im)
+        t3 = time.time()
+        print("post-process: %s" % (t3-t2))
     NLp_sum = NLp_irreps.sum(axis=0)
-    
-    if True and NPOINTS == 50:
-        fsize = matplotlib.rcParams["font.size"]
-        # fig, axs = plt.subplots(5, 10, figsize=(16, 10))
-        fig, axs = plt.subplots(5, 10, figsize=(24,16))
-        for i in range(5):
-            for j in range(10):
-                k = 10 * i + j
-                if matrices_prob[k].size > 0:
-                    im = axs[i, j].matshow(matrices_prob[k], vmin=0.0, vmax=1.0)
-                    # axs[i, j].set_xticks(np.arange(len(Irreps[k])), Irreps[k])
-                    # axs[i, j].set_yticks(np.arange(len(Irreps[k])), Irreps[k])
-                    axs[i, j].set_xticks(np.arange(len(Irreps[k])))
-                    axs[i, j].set_xticklabels(Irreps[k])
-                    axs[i, j].set_yticks(np.arange(len(Irreps[k])))
-                    axs[i, j].set_yticklabels(Irreps[k])
-                else:
-                    axs[i, j].axis("off")
-                axs[i, j].text(
-                    0.5,
-                    0.5,
-                    r"${0:.2f}$".format(inc_omega[k]),
-                    horizontalalignment="center",
-                    verticalalignment="center",
-                    transform=axs[i, j].transAxes,
-                    fontdict=dict(size=fsize / 1.2, color="red", weight="bold"),
-                )
-    plt.tight_layout()      
-    plt.subplots_adjust(hspace=1e-3, wspace=1e-3, right=0.9)
-    cbar_ax = fig.add_axes([0.95, 0.05, 0.02, 0.9])
-    fig.colorbar(im, cax=cbar_ax)
-    plt.savefig(os.path.join(path_directory, "section.png"), dpi=500)
 
-    fig, ax = plt.subplots()
-    plt.plot(np.array(inc_omega), trans_check, label="modes_sum", color="yellow")
-    plt.plot(np.array(inc_omega), trans, label="Caroli", color="grey")
-    plt.plot(np.array(inc_omega), NLp_sum, label="Irreps_sum", color="pink")
+    t0 = time.time()
+    fig, axs = plt.subplots(figsize=(12, 8))
 
-    # fig1, ax1 = plt.subplots()
-    color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'yellow', 'pink']
-    labels = ["|m|=0","|m|=1","|m|=2","|m|=3","|m|=4","|m|=5","|m|=6","|m|=7","|m|=8","|m|=9"]
+    # colors = [value for key, value in mcolors.TABLEAU_COLORS.items()]
+    # colors = [value for key, value in mcolors.CSS4_COLORS.items()]
+    colors = [value for key, value in mcolors.XKCD_COLORS.items()]
+    # color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan']
+    labels = ["|m|=0", "|m|=1", "|m|=2", "|m|=3", "|m|=4", "|m|=5", "|m|=6", "|m|=7"]
+    linestyle_tuple = ['solid',
+        ('long dash with offset', (5, (10, 3))),
+        ('loosely dashed', (0, (5, 10))),]
 
-    NLp_irreps = np.array([NLp_irreps[2],NLp_irreps[1]+NLp_irreps[3],NLp_irreps[0]+NLp_irreps[4],NLp_irreps[5]])
+    # NLp_irreps = np.array([NLp_irreps[2], NLp_irreps[1] + NLp_irreps[3], NLp_irreps[0] + NLp_irreps[4], NLp_irreps[5]])
     for ii, freq in enumerate(NLp_irreps):
-        plt.plot(np.array(inc_omega), freq, label=labels[ii], color=color[ii])
+        plt.plot(np.array(inc_omega), freq, label=labels[ii], color=colors[ii])
+
+    plt.plot(inc_omega, NLp, label=r"$Pure-N_{L+}$", color="grey")
+    plt.plot(np.array(inc_omega), trans, label="Caroli", color=colors[ii+1], linestyle=linestyle_tuple[0])
+    plt.plot(np.array(inc_omega), trans_check, label="modes_sum", color=colors[ii+2], linestyle=linestyle_tuple[1][1])
+    plt.plot(np.array(inc_omega), NLp_sum, label="Irreps_sum", color=colors[ii+3], linestyle=linestyle_tuple[2][1])
 
     plt.xlim(left=0.0)
     plt.ylim(bottom=0.0)
@@ -651,6 +602,10 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.xlabel("$\omega\;(\mathrm{rad/ps})$")
     plt.ylabel(r"$T(\omega)$")
-
+    plt.tick_params(labelsize=14)
     plt.savefig(os.path.join(path_directory, "transmission_sym_adapted_defect.png"), dpi=600)
+    np.savez(path_savedata, inc_omega=inc_omega, NLp_irreps=NLp_irreps, NLp=NLp, NRp=NRp, NLm=NLm, NRm=NRm, trans=trans, trans_check=trans_check, NLp_sum=NLp_sum)
+
+    t1 = time.time()
+    print("plot and save the figure: %s" % (t1 - t0))
     plt.show()

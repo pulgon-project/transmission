@@ -3,12 +3,10 @@ from ipdb import set_trace
 import ipdb
 import logging
 from pulgon_tools_wip.utils import fast_orth, get_character
-
 import copy
 import scipy.linalg as la
 from phonopy.units import VaspToTHz
 import scipy
-
 
 
 def counting_y_from_xy(y,xy, direction=1, tolerance=1e-5):
@@ -49,39 +47,42 @@ def get_adapted_matrix(DictParams, num_atom, matrices):
             IR_ndim = 1
         else:
             IR_ndim = chara.shape[-1]
-
         num_modes = 0
         projector = np.zeros((ndof, ndof), dtype=np.complex128)
+
         for kk in range(len(chara)):  # loop ops
             if IR_ndim==1:
                 chara_conj = chara[kk].conj()
             else:
-                chara_conj = chara[kk].conj().trace()
+                # chara_conj = chara[kk].conj().trace()
+                chara_conj = chara[kk].trace().conj()
             num_modes += chara_conj * matrices[kk].trace()
             projector += chara_conj * matrices[kk]
         projector = IR_ndim * projector / len(chara)
-        num_modes = (num_modes / len(chara)).real
-        # num_modes = projector.trace().real
-        if num_modes.is_integer():
-            num_modes = num_modes.astype(np.int32)
+        # num_modes = (num_modes / len(chara)).real
+        num_modes = projector.trace().real
+
+        if np.isclose(num_modes, np.round(num_modes)):
+            # num_modes = num_modes.astype(np.int32)
+            num_modes = np.round(num_modes).astype(np.int32)
         else:
             set_trace()
             logging.ERROR("num_modes is not an integer")
         # basis, error = fast_orth(projector, num_modes)
         u, s, vh = scipy.linalg.svd(projector)
+
         basis = u[:,:num_modes]
         error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
-        # if error>0.05:
-        #     print("error: ", error)
-        #     set_trace()
-
+        if error>0.05:
+            print("error: ", error)
+            set_trace()
         dimension.append(basis.shape[1])
         adapted.append(basis)
 
     adapted = np.concatenate(adapted, axis=1)
-    # if adapted.shape[0] != adapted.shape[1] or adapted.shape[0] != ndof:
-    #     set_trace()
-    #     logging.ERROR("the shape of adapted is incorrect")
+    if adapted.shape[0] != adapted.shape[1] or adapted.shape[0] != ndof:
+        set_trace()
+        logging.ERROR("the shape of adapted is incorrect")
     return adapted, dimension
 
 
@@ -147,8 +148,8 @@ def divide_irreps(vec, adapted, dimensions):
     Returns:
 
     """
-    # tmp1 = vec @ adapted.conj()
-    tmp1 = vec @ adapted
+    tmp1 = vec @ adapted.conj()
+    # tmp1 = vec @ adapted
     start = 0
     means, vectors = [], []
     for im, dim in enumerate(dimensions):
@@ -168,7 +169,7 @@ def divide_irreps(vec, adapted, dimensions):
     return np.array(means)
 
 
-def divide_over_irreps(vecs, basis, dimensions):
+def divide_over_irreps(vecs, basis, dimensions, rcond=0.05):
     """
 
     Args:
@@ -184,21 +185,25 @@ def divide_over_irreps(vecs, basis, dimensions):
     splits = np.cumsum(dimensions)[:-1]
     irrep_bases = np.split(basis, splits, axis=1)
     adapted_vecs = []
-
-    for b in irrep_bases:
+    coeff = []
+    for ii, b in enumerate(irrep_bases):
         combined_matrix = np.concatenate([vecs, -b], axis=1)
         # TODO: Handle the tolerance more sensibly and systematically.
-        kernel = la.null_space(combined_matrix, rcond=1e-1)
-        # set_trace()
+        kernel = la.null_space(combined_matrix, rcond=rcond)
         n_solutions = kernel.shape[1]
         coefficients = kernel[:n_vecs, :]
         new_vecs = vecs @ coefficients
         if n_solutions > 0:
             new_vecs = la.orth(new_vecs)
         adapted_vecs.append(new_vecs)
+        coeff.append(coefficients)
     found = sum(v.shape[1] for v in adapted_vecs)
     if found != n_vecs:
-        # res = divide_irreps(vecs.T,basis,dimensions)
+        res = divide_irreps(vecs.T,basis,dimensions)
+        print(f"{n_vecs} were needed, but {found} were found")
+        print("res:", res)
+        set_trace()
+        # res1 = np.linalg.svd(np.concatenate([vecs, -irrep_bases[0]], axis=1), full_matrices=True)[1]
         raise ValueError(f"{n_vecs} were needed, but {found} were found")
     return adapted_vecs
 

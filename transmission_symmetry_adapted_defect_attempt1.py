@@ -553,7 +553,7 @@ if __name__ == "__main__":
 
     NLp_sum = NLp_irreps.sum(axis=0)
 
-    # if True and NPOINTS == 50:
+    # if True and NPOINTS == 10x0-20x0-u1-5-defect-S-1_rcond=0.2:
     #     fsize = matplotlib.rcParams["font.size"]
     #     fig, axs = plt.subplots(5, 10, figsize=(16, 10))
     #     # fig, axs = plt.subplots(5, 10, figsize=(18, 12))

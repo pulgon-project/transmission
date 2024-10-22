@@ -17,6 +17,7 @@ import sys
 import os.path
 import copy
 import argparse
+import time
 
 import tqdm
 import numpy as np
@@ -52,7 +53,7 @@ from ase import Atoms
 from utilities import counting_y_from_xy
 
 matplotlib.rcParams["font.size"] = 16.0
-NPOINTS = 50
+NPOINTS = 11
 
 
 if __name__ == "__main__":
@@ -94,6 +95,9 @@ if __name__ == "__main__":
     # parser.add_argument("defect_indices", help="force constant file")
     parser.add_argument("data_directory", help="directory")
     args = parser.parse_args()
+
+    t0 = time.time()
+
 
     path_directory = args.data_directory
     path_phonopy = os.path.join(path_directory, "phonopy_defect.yaml")
@@ -449,7 +453,7 @@ if __name__ == "__main__":
         if not np.isclose(trans_check[iomega], trans[iomega], atol=1.0):
             print("Problem at omega={} rad/ps".format(inc_omega[iomega]))
 
-    # if True and NPOINTS == 50:
+    # if True and NPOINTS == 10x0-20x0-u1-5-defect-S-1_rcond=0.2:
     #     fsize = matplotlib.rcParams["font.size"]
     #     fig, axs = plt.subplots(5, 10, figsize=(16, 10))
     #     for i in range(5):
@@ -496,5 +500,9 @@ if __name__ == "__main__":
     plt.legend(loc="best")
     plt.tight_layout()
     # set_trace()
-    plt.savefig(path_savefig, dpi=600)
+    # plt.savefig(path_savefig, dpi=600)
+
+    t1 = time.time()
+    print("Total time spent:", t1-t0)
+
     plt.show()

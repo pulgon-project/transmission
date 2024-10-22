@@ -166,7 +166,7 @@ primitive_cell:
   - symbol: C  # 49
     coordinates: [  0.590433932505249,  0.386615747794923,  0.571693972089294 ]
     mass: 12.010700
-  - symbol: C  # 50
+  - symbol: C  # 10x0-20x0-u1-5-defect-S-1_rcond=0.2
     coordinates: [  0.625596324167654,  0.427475183929522,  0.499734573775802 ]
     mass: 12.010700
   - symbol: C  # 51
@@ -394,10 +394,10 @@ unit_cell:
     coordinates: [  0.590433932505249,  0.386615747794923,  0.571693972089294 ]
     mass: 12.010700
     reduced_to: 49
-  - symbol: C  # 50
+  - symbol: C  # 10x0-20x0-u1-5-defect-S-1_rcond=0.2
     coordinates: [  0.625596324167654,  0.427475183929522,  0.499734573775802 ]
     mass: 12.010700
-    reduced_to: 50
+    reduced_to: 10x0-20x0-u1-5-defect-S-1_rcond=0.2
   - symbol: C  # 51
     coordinates: [  0.613396935694988,  0.409581970947050,  0.928836811753750 ]
     mass: 12.010700
@@ -625,7 +625,7 @@ supercell:
     coordinates: [  0.532262734379651,  0.641398043401447,  0.035780638794894 ]
     mass: 12.010700
     reduced_to: 49
-  - symbol: C  # 50
+  - symbol: C  # 10x0-20x0-u1-5-defect-S-1_rcond=0.2
     coordinates: [  0.532262734379651,  0.641398043401447,  0.285780638794894 ]
     mass: 12.010700
     reduced_to: 49

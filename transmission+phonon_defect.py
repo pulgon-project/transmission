@@ -42,15 +42,14 @@ import ase.data
 import matplotlib
 import matplotlib.pyplot as plt
 import phonopy
-
+import time
 import decimation
 from ipdb import set_trace
 from matplotlib.cm import ScalarMappable
 
 
 matplotlib.rcParams["font.size"] = 16.0
-
-NPOINTS = 101
+NPOINTS = 51
 
 
 if __name__ == "__main__":
@@ -92,6 +91,7 @@ if __name__ == "__main__":
     # parser.add_argument("defect_indices", help="force constant file")
     parser.add_argument("data_directory", help="directory")
     args = parser.parse_args()
+    t0 = time.time()
 
     path_directory = args.data_directory
     path_phonopy_defect = os.path.join(path_directory, "phonopy_defect.yaml")
@@ -101,6 +101,7 @@ if __name__ == "__main__":
     path_defect_indices = os.path.join(path_directory, "defect_indices.npz")
     path_poscar = os.path.join(path_directory, "POSCAR")
     path_savfig = os.path.join(path_directory, "phonon+transmission")
+    path_savedata = os.path.join(path_directory, "trans_modes")
 
     phonon = phonopy.load(phonopy_yaml=path_phonopy_defect)
     phonon_pure = phonopy.load(phonopy_yaml=path_phonopy_pure)
@@ -145,15 +146,6 @@ if __name__ == "__main__":
     qvec = np.linspace(-np.pi, np.pi, num=NPOINTS)
     omegaL, vgL = decimation.q2omega(HL, TL, qvec)
     omegaR, vgR = decimation.q2omega(HR, TR, qvec)
-
-    # fig, ax = plt.subplots()
-    # for i, f_raw in enumerate(omegaL.T):
-    #     if i == 0:
-    #         ax.plot(qvec, f_raw, 'o-', markersize=3, color="grey", label="1S defect")
-    #     else:
-    #         # ax.plot(qvec, f_raw, 'o-',markersize=3, color="grey")
-    #         ax.plot(qvec, f_raw, 'o-',markersize=3)
-    # plt.show()
 
 
     # Compute all the parameters of the interface
@@ -333,7 +325,6 @@ if __name__ == "__main__":
         VLretm12 = np.sqrt(VLretm)
         VRadvp12 = np.sqrt(VRadvp)
 
-
         tRL = (
             2.0j
             * omega
@@ -355,8 +346,7 @@ if __name__ == "__main__":
             )
         )
 
-        #  Discard evanescent modes.
-
+        # Discard evanescent modes.
         # if not (mask_Rretp==mask_Ladvm).all():
         #     set_trace()
         #     logging.ERROR("mask_Rretp != mask_Ladvm")
@@ -365,7 +355,8 @@ if __name__ == "__main__":
         # Compute the total transmission again.
         trans_check[iomega] = np.diag(tRL.conj().T @ tRL).sum().real
         trans_values.append(np.diag(tRL.conj().T @ tRL).real)
-        k_w.append(np.arccos(ALadvm[mask_Ladvm].real) / aL)
+        # k_w.append(np.arccos(ALadvm[mask_Ladvm].real) / aL)
+        k_w.append(np.angle(ALadvm[mask_Ladvm]) / aL)
         if not np.isclose(trans_check[iomega], trans[iomega], atol=1.0):
             print("Problem at omega={} rad/ps".format(inc_omega[iomega]))
 
@@ -393,7 +384,15 @@ if __name__ == "__main__":
         y = omega * np.ones_like(x)
         scatter = plt.scatter(x, y, s=6, c=trans_values[iomega], cmap="coolwarm", vmin=0, vmax=1, zorder=2)
 
+    k_w = np.array(k_w, dtype=object)
+    trans_values = np.array(trans_values, dtype=object)
+    np.savez(path_savedata, inc_omega=inc_omega, k_w=k_w, trans_values=trans_values, qpoints_onedim=qpoints_onedim, omegaL=omegaL)
+
     plt.colorbar(scatter, label='Values')
     plt.legend(loc="best")
-    plt.savefig(path_savfig, dpi=600)
+    # plt.savefig(path_savfig, dpi=600)
+
+    t1 = time.time()
+    print("total time spend: ", t1-t0)
+
     plt.show()

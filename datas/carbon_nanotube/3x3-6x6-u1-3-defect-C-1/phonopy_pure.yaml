@@ -485,7 +485,7 @@ supercell:
     coordinates: [  0.661871951533850,  0.502649489679484,  0.999999988717336 ]
     mass: 12.010700
     reduced_to: 49
-  - symbol: C  # 50
+  - symbol: C  # 10x0-20x0-u1-5-defect-S-1_rcond=0.2
     coordinates: [  0.661871951533850,  0.502649489679484,  0.249999988717336 ]
     mass: 12.010700
     reduced_to: 49

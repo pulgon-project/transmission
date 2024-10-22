@@ -10,7 +10,10 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+datas/MoS2/
 datas/WS2-MoS2/
+datas/WS2-MoS2_NNFF-epoch2000-1/
+datas/WS2-MoS2_NNFF1/
 develop-eggs/
 dist/
 downloads/
@@ -29,6 +32,8 @@ share/python-wheels/
 MANIFEST
 *.vasp
 *.npy
+plot_*
+
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
