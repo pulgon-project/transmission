@@ -34,7 +34,7 @@ def main():
     path_0 = args.data_directory
 
     # path_0 = "datas/WS2-MoS2_NNFF-epoch2000-1/6x6-u1-3-WMo-S12-1"
-    path_0 = "datas/WS2-MoS2_NNFF-epoch2000-1/10x0-u1-3-WMo-C1-1"
+    # path_0 = "datas/WS2/10x0-u1-3-WMo-C1-1"
     # path_0 = "datas/carbon_nanotube/4x1-u1-3-defect-C-1"
     # path_0 = "datas/carbon_nanotube/5x0-10x0-u1-3-defect-C5v-1"
     # path_0 = "datas/WS2-MoS2/10x0-20x0-u1-5-defect-S-1"
@@ -65,10 +65,7 @@ def main():
     )
     qpoints = qpoints[0]
     qpoints_1dim = qpoints[:,2] * 2 * np.pi
-
     qpoints_1dim = qpoints_1dim / aL
-    # qpoints_1dim = qpoints_1dim[[25, 0]]
-    # qpoints_1dim = qpoints_1dim[[4, 25]]
 
     ################ family 4 ##################
     # family = 4

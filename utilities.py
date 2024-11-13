@@ -7,6 +7,7 @@ import copy
 import scipy.linalg as la
 from phonopy.units import VaspToTHz
 import scipy
+from sympy.physics.quantum import TensorProduct
 
 
 def counting_y_from_xy(y,xy, direction=1, tolerance=1e-5):
@@ -193,6 +194,9 @@ def divide_over_irreps(vecs, basis, dimensions, rcond=0.05):
         n_solutions = kernel.shape[1]
         coefficients = kernel[:n_vecs, :]
         new_vecs = vecs @ coefficients
+        # coefficients = kernel[n_vecs:, :]
+        # new_vecs = -b @ coefficients
+
         if n_solutions > 0:
             new_vecs = la.orth(new_vecs)
         adapted_vecs.append(new_vecs)
@@ -202,7 +206,7 @@ def divide_over_irreps(vecs, basis, dimensions, rcond=0.05):
         res = divide_irreps(vecs.T,basis,dimensions)
         print(f"{n_vecs} were needed, but {found} were found")
         print("res:", res)
-        set_trace()
+        # set_trace()
         # res1 = np.linalg.svd(np.concatenate([vecs, -irrep_bases[0]], axis=1), full_matrices=True)[1]
         raise ValueError(f"{n_vecs} were needed, but {found} were found")
     return adapted_vecs
@@ -253,4 +257,74 @@ def get_freqAndeigvec_from_qp(D, DictParams, num_atom, matrices):
 def commuting(A, B):
     res = ((A @ B - B @ A)==0).all()
     return res
+
+
+def get_modified_adapted_matrix(DictParams, num_atom, matrices):
+    """
+
+    Args:
+        qp: q/k point
+        nrot: The rotational quantum number of the structure "Cn"
+        order: The multiplication order from generators to symmetry operations
+        family: The line group family index
+        a: The period length in z direction
+        num_atom: The number of atoms
+        matrices:
+
+    Returns:
+        adapted: The symmetry projection basis matrix for irreducible representation
+
+    """
+    characters, paras_values, paras_symbols = get_character(
+        DictParams
+    )
+
+    # ndof = 3 * num_atom
+    adapted = []
+    dimension = []
+    for ii, chara in enumerate(characters):  # loop IR
+        if chara.ndim ==1:
+            IR_ndim = 1
+        else:
+            IR_ndim = chara.shape[-1]
+        num_modes = 0
+
+        ndof = IR_ndim * matrices[0].shape[0]
+        projector = np.zeros((ndof, ndof), dtype=np.complex128)
+        for kk in range(len(chara)):  # loop ops
+            projector += TensorProduct(np.array(chara[kk]), matrices[kk])
+
+        projector = projector / len(chara)
+        # num_modes = (num_modes / len(chara)).real
+        num_modes = projector.trace().real
+
+        if np.isclose(num_modes, np.round(num_modes)):
+            num_modes = np.round(num_modes).astype(np.int32)
+        else:
+            set_trace()
+            logging.ERROR("num_modes is not an integer")
+        # basis, error = fast_orth(projector, num_modes)
+
+        u, s, vh = scipy.linalg.svd(projector)
+        basis = u[:,:num_modes]
+        error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
+        if error>0.05:
+            print("error: ", error)
+            set_trace()
+
+        if IR_ndim != 1:
+            basis = np.array(np.array_split(basis, 2, axis=0))
+            basis = scipy.linalg.orth(np.concatenate(basis, axis=1))
+
+        dimension.append(basis.shape[1])
+        adapted.append(basis)
+
+    adapted = np.concatenate(adapted, axis=1)
+    if adapted.shape[0] != adapted.shape[1]:
+        set_trace()
+        logging.ERROR("the shape of adapted is incorrect")
+    return adapted, dimension
+
+
+
 

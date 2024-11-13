@@ -36,6 +36,7 @@ from pulgon_tools_wip.utils import (
     fast_orth,
     get_character,
     get_matrices,
+    get_matrices_withPhase,
     find_axis_center_of_nanotube,
     dimino_affine_matrix_and_subsquent,
     Cn,
@@ -60,7 +61,7 @@ from functools import partial
 matplotlib.rcParams["font.size"] = 16.0
 
 
-def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR, args ):
+def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR, args):
     HL_complex = HL.astype(complex)
     TL_complex = TL.astype(complex)
     HR_complex = HR.astype(complex)
@@ -137,9 +138,11 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
         GRLret @ (GRLret @ GammaL.conj().T).conj().T @ GammaR
     ).real
 
-    def orthogonalize(values, vectors, DictParams, k_adapteds, adapteds, dimensions, omega=None):
+    def orthogonalize(values, vectors, DictParams, k_adapteds, adapteds, dimensions, inv_index=False):
         mask = np.isclose(np.abs(values), 1.0, args.rtol, args.mtol)
-        order_val = np.lexsort((np.arccos(values.real), 1 * (~mask)))
+        # order_val = np.lexsort((np.arccos(values.real), 1 * (~mask)))
+        order_val = np.lexsort((np.angle(values), 1 * (~mask)))
+
         values = values[order_val]
         vectors = vectors[:, order_val]
         mask = np.isclose(np.abs(values), 1.0, args.rtol, args.mtol)
@@ -148,10 +151,13 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
         hi = 1
         groups = []
         while True:
+
+            if mask.sum() == 0:
+                break
+
             if hi >= mask.sum() or not np.isclose(
+                    np.angle(values[hi]) / aL, np.angle(values[hi - 1]) / aL, rtol=args.rtol, atol=args.atol,
                     # np.arccos(values[hi].real) / aL, np.arccos(values[hi - 1].real) / aL, rtol=args.rtol, atol=args.atol,
-                    np.arccos(values[hi].real) / aL, np.arccos(values[hi - 1].real) / aL, rtol=args.rtol,
-                    atol=args.atol,
             ):
                 groups.append((lo, hi))
                 lo = hi
@@ -167,14 +173,22 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
         irreps = []
         for g in groups:
             lo, hi = g
+            k_w_group = np.angle(values[lo]) / aL
             # k_w_group = np.arccos(values[lo:hi][0].real) / aL
-            k_w_group = np.arccos(values[lo:hi][0].real) / aL
             DictParams["qpoints"] = k_w_group
 
             if k_w_group in k_adapteds:
                 itp = k_adapteds.index(k_w_group)
                 basis, dims = adapteds[itp], dimensions[itp]
             else:
+                tmp1 = phonon.primitive.positions[:, 2].reshape(-1, 1)
+                factor_pos = tmp1 - tmp1.T
+                factor_pos = np.repeat(np.repeat(factor_pos, 3, axis=0), 3, axis=1).astype(np.complex128)
+                if inv_index==True:
+                    factor_pos = factor_pos.T
+                matrices = get_matrices_withPhase(atom_center, ops_car_sym, k_w_group)
+                matrices = matrices * np.exp(1j * k_w_group * factor_pos)
+
                 basis, dims = get_adapted_matrix(DictParams, num_atoms, matrices)
                 k_adapteds.append(k_w_group)
                 adapteds.append(basis)
@@ -206,21 +220,22 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
     k_adapteds, adapteds, dimensions = [], [], []
     ALadvm, ULadvm, mask_Ladvm, irreps, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLadvm),
                                                                                              DictParams, k_adapteds,
-                                                                                             adapteds, dimensions, omega)
-    ALretm, ULretm, mask_Lretm, _, _, _, _ = orthogonalize(*la.eig(inv_FLretm), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions)
-    ARretm, URretm, mask_Rretm, _, _, _, _ = orthogonalize(*la.eig(inv_FRretm), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions)
-    ARadvm, URadvm, mask_Radvm, _, _, _, _ = orthogonalize(*la.eig(inv_FRadvm), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions)
-    ALretp, ULretp, mask_Lretp, _, _, _, _ = orthogonalize(*la.eig(FLretp), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions)
-    ARretp, URretp, mask_Rretp, _, _, _, _ = orthogonalize(*la.eig(FRretp), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions)
-    ALadvp, ULadvp, mask_Ladvp, _, _, _, _ = orthogonalize(*la.eig(FLadvp), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions)
-    ARadvp, URadvp, mask_Radvp, _, _, _, _ = orthogonalize(*la.eig(FRadvp), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions)
+                                                                                             adapteds, dimensions, inv_index=True)
+    ALretm, ULretm, mask_Lretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLretm), DictParams,
+                                                                                    k_adapteds, adapteds, dimensions, inv_index=True)
+    ARretm, URretm, mask_Rretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRretm), DictParams,
+                                                                                    k_adapteds, adapteds, dimensions, inv_index=True)
+    ARadvm, URadvm, mask_Radvm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRadvm), DictParams,
+                                                                                    k_adapteds, adapteds, dimensions, inv_index=True)
+    k_adapteds, adapteds, dimensions = [], [], []
+    ALretp, ULretp, mask_Lretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLretp), DictParams,
+                                                                                    k_adapteds, adapteds, dimensions,inv_index=False)
+    ARretp, URretp, mask_Rretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRretp), DictParams,
+                                                                                    k_adapteds, adapteds, dimensions,inv_index=False)
+    ALadvp, ULadvp, mask_Ladvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLadvp), DictParams,
+                                                                                    k_adapteds, adapteds, dimensions,inv_index=False)
+    ARadvp, URadvp, mask_Radvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRadvp), DictParams,
+                                                                                    k_adapteds, adapteds, dimensions,inv_index=False)
 
     # Compute the group velocity matrices.
     # yapf: disable
@@ -357,7 +372,7 @@ if __name__ == "__main__":
         "-e",
         "--eps",
         type=float,
-        default=1e-5,
+        default=1e-8,
         help="prefactor for the imaginary part of the energies",
     )
     parser.add_argument(
@@ -380,7 +395,7 @@ if __name__ == "__main__":
         "-t3",
         "--mtol",
         type=float,
-        default=1e-3,
+        default=1e-2,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
              " it a propagating mode",
     )
@@ -388,7 +403,7 @@ if __name__ == "__main__":
         "-t4",
         "--means_tol",
         type=float,
-        default=1e-3,
+        default=1e-2,
         help="if a mode's eigenvalue has modulus > 1 - tolerance, consider"
              " it a propagating mode",
     )
@@ -396,7 +411,7 @@ if __name__ == "__main__":
         "-d",
         "--decimation",
         type=float,
-        default=1e-8,
+        default=1e-10,
         help="tolerance for the decimation procedure",
     )
     parser.add_argument(
@@ -410,7 +425,7 @@ if __name__ == "__main__":
         "-n1",
         "--NPOINTS",
         type=int,
-        default=101,
+        default=51,
         help="maximum number of iterations in the decimation loop",
     )
     parser.add_argument(
@@ -425,7 +440,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print("*******************")
-    rcond = 0.4
+    rcond = 0.2
     print("rcond =", rcond)
     print("*******************")
     t0 = time.time()
@@ -507,7 +522,7 @@ if __name__ == "__main__":
             op[:3, :3], op[:3, 3] * cyclic._pure_trans
         )
         ops_car_sym.append(tmp_sym)
-    matrices = get_matrices(atom_center, ops_car_sym)
+    # matrices = get_matrices(atom_center, ops_car_sym)
     num_atoms = len(phonon.primitive.numbers)
 
     LR_blocks = np.load(path_LR_blocks)
@@ -616,11 +631,12 @@ if __name__ == "__main__":
     NLp_sum = NLp_irreps.sum(axis=0)
     fig, axs = plt.subplots(figsize=(12, 8))
 
-    # colors = [value for key, value in mcolors.TABLEAU_COLORS.items()]
-    # colors = [value for key, value in mcolors.CSS4_COLORS.items()]
     colors = [value for key, value in mcolors.XKCD_COLORS.items()]
-    # color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan']
-    labels = ["|m|=0", "|m|=1", "|m|=2", "|m|=3", "|m|=4", "|m|=5", "|m|=6", "|m|=7"]
+    # colors = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'yellow', 'pink', 'olive', 'slategray', 'darkkhaki', 'yellowgreen']
+    # color = plt.cm.viridis(np.linspace(0, 1, len(frequencies)))
+    labels = ["|m|=0","|m|=1","|m|=2","|m|=3","|m|=4","|m|=5","|m|=6","|m|=7","|m|=8","|m|=9", "|m|=10", "|m|=11","|m|=12", "|m|=13", "|m|=14"]
+
+
     linestyle_tuple = ['solid',
         ('long dash with offset', (5, (10, 3))),
         ('loosely dashed', (0, (5, 10))),]

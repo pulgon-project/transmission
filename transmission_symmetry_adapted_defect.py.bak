@@ -546,5 +546,5 @@ if __name__ == "__main__":
     plt.legend(loc="best")
     plt.tight_layout()
 
-    plt.savefig(os.path.join(path_directory, "transmission_sym_adapted_defect.png"), dpi=600)
+    plt.savefig(os.path.join(path_directory, "transmission_sym_adapted_defect_21.png"), dpi=600)
     plt.show()

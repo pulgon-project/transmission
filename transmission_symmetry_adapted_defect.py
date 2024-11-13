@@ -18,6 +18,7 @@ import os.path
 import copy
 import argparse
 import time
+from turtledemo.forest import start
 
 import tqdm
 import numpy as np
@@ -37,6 +38,7 @@ from pulgon_tools_wip.utils import (
     fast_orth,
     get_character,
     get_matrices,
+    get_matrices_withPhase,
     find_axis_center_of_nanotube,
     dimino_affine_matrix_and_subsquent,
     Cn,
@@ -57,7 +59,8 @@ import matplotlib.colors as mcolors
 
 
 matplotlib.rcParams["font.size"] = 16.0
-NPOINTS = 6
+NPOINTS = 5
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -67,7 +70,7 @@ if __name__ == "__main__":
         "-e",
         "--eps",
         type=float,
-        default=1e-5,
+        default=1e-8,
         help="prefactor for the imaginary part of the energies",
     )
     parser.add_argument(
@@ -106,7 +109,7 @@ if __name__ == "__main__":
         "-d",
         "--decimation",
         type=float,
-        default=1e-8,
+        default=1e-10,
         help="tolerance for the decimation procedure",
     )
     parser.add_argument(
@@ -124,7 +127,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print("*******************")
-    rcond = 0.5
+    rcond = 0.2
     print("rcond =", rcond)
     print("*******************")
 
@@ -207,7 +210,7 @@ if __name__ == "__main__":
             op[:3, :3], op[:3, 3] * cyclic._pure_trans
         )
         ops_car_sym.append(tmp_sym)
-    matrices = get_matrices(atom_center, ops_car_sym)
+    # matrices = get_matrices(atom_center, ops_car_sym)
 
     num_atoms = len(phonon.primitive.numbers)
     LR_blocks = np.load(path_LR_blocks)
@@ -252,11 +255,7 @@ if __name__ == "__main__":
     qvec = np.linspace(-np.pi, np.pi, num=NPOINTS*10)
     omegaL, vgL = decimation.q2omega(HL, TL, qvec)
     # Compute all the parameters of the interface
-    # inc_omega = np.linspace(1e-1, omegaL.max() * 1.01, num=NPOINTS, endpoint=True)
-    inc_omega = np.linspace(15, 20, num=50, endpoint=True)
-
-
-    # inc_omega = np.linspace(70.31088469894658, 100, num=2, endpoint=True)
+    inc_omega = np.linspace(1e-1, omegaL.max() * 1.01, num=NPOINTS, endpoint=True)
 
 
     trans = np.zeros_like(inc_omega)
@@ -277,7 +276,9 @@ if __name__ == "__main__":
     matrices_prob, Irreps = [], []
     NLp_irreps = np.zeros((num_irreps, NPOINTS))  # the number of im
     for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
-        iomega, omega = 0, 15.846153846153847
+
+        if iomega == 0:
+            continue
 
         print("---------------------")
         print("omega=", omega)
@@ -359,11 +360,11 @@ if __name__ == "__main__":
         print(trans[iomega])
         t1 = time.time()
         print("The time of G matrix: %s" % (t1-t0))
-        def orthogonalize(values, vectors, DictParams, k_adapteds, adapteds, dimensions):
+        def orthogonalize(values, vectors, DictParams, k_adapteds, adapteds, dimensions, inv_index=False):
             mask = np.isclose(np.abs(values), 1.0, args.rtol, args.mtol)
 
-            order_val = np.lexsort((np.arccos(values.real), 1 * (~mask)))
-            # order_val = np.lexsort((np.angle(values), 1 * (~mask)))
+            # order_val = np.lexsort((np.arccos(values.real), 1 * (~mask)))
+            order_val = np.lexsort((np.angle(values), 1 * (~mask)))
             values = values[order_val]
             vectors = vectors[:, order_val]
 
@@ -371,9 +372,12 @@ if __name__ == "__main__":
             hi = 1
             groups = []
             while True:
+                if mask.sum() == 0:
+                    break
+
                 if hi >= mask.sum() or not np.isclose(
-                # np.angle(values[hi]) / aL, np.angle(values[hi - 1]) / aL, rtol=args.rtol, atol=args.atol,
-                np.arccos(values[hi].real) / aL, np.arccos(values[hi - 1].real) / aL, rtol=args.rtol, atol=args.atol,
+                np.angle(values[hi]) / aL, np.angle(values[hi - 1]) / aL, rtol=args.rtol, atol=args.atol,
+                # np.arccos(values[hi].real) / aL, np.arccos(values[hi - 1].real) / aL, rtol=args.rtol, atol=args.atol,
                 ):
                     groups.append((lo, hi))
                     lo = hi
@@ -384,19 +388,29 @@ if __name__ == "__main__":
                 lo, hi = g
                 if hi > lo + 1:
                     values[lo:hi] = values[lo:hi].mean()
-                    vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
+                    # vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
 
             irreps = []
             for g in groups:
                 lo, hi = g
-                k_w_group = np.arccos(values[lo].real) / aL
-                # k_w_group = np.angle(values[lo]) / aL
+                # k_w_group = np.arccos(values[lo].real) / aL
+                k_w_group = np.angle(values[lo]) / aL
                 DictParams["qpoints"] = k_w_group
+                # DictParams["qpoints"] = 0
 
                 if k_w_group in k_adapteds:
                     itp = k_adapteds.index(k_w_group)
                     basis, dims = adapteds[itp], dimensions[itp]
                 else:
+                    tmp1 = phonon.primitive.positions[:, 2].reshape(-1, 1)
+                    factor_pos = tmp1 - tmp1.T
+                    factor_pos = np.repeat(np.repeat(factor_pos, 3, axis=0), 3, axis=1).astype(np.complex128)
+                    if inv_index == True:
+                        factor_pos = factor_pos.T
+                    matrices = get_matrices_withPhase(atom_center, ops_car_sym, k_w_group)
+                    # matrices = get_matrices_withPhase(atom_center, ops_car_sym, 0)
+                    matrices = matrices * np.exp(1j * k_w_group * factor_pos)
+
                     basis, dims = get_adapted_matrix(DictParams, num_atoms, matrices)
                     k_adapteds.append(k_w_group)
                     adapteds.append(basis)
@@ -408,7 +422,8 @@ if __name__ == "__main__":
                 except Exception as e:
                     print("k_w_group:", k_w_group)
                     print(e)
-                    # set_trace()
+
+                    set_trace()
                     continue
                 tmp_vec = []
                 for i_ir, v in enumerate(adapted_vecs):
@@ -425,16 +440,16 @@ if __name__ == "__main__":
         DictParams = {"nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4, 13
 
         k_adapteds, adapteds, dimensions = [], [], []
-        ALadvm, ULadvm, mask_Ladvm, tmp_irreps, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLadvm), DictParams, k_adapteds, adapteds, dimensions)
+        ALadvm, ULadvm, mask_Ladvm, tmp_irreps, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLadvm), DictParams, k_adapteds, adapteds, dimensions, inv_index=True)
+        ALretm, ULretm, mask_Lretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLretm), DictParams, k_adapteds, adapteds, dimensions, inv_index=True)
+        ARretm, URretm, mask_Rretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRretm), DictParams, k_adapteds, adapteds, dimensions, inv_index=True)
+        ARadvm, URadvm, mask_Radvm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRadvm), DictParams, k_adapteds, adapteds, dimensions, inv_index=True)
 
-        set_trace()
-        ALretm, ULretm, mask_Lretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLretm), DictParams, k_adapteds, adapteds, dimensions)
-        ARretm, URretm, mask_Rretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRretm), DictParams, k_adapteds, adapteds, dimensions)
-        ARadvm, URadvm, mask_Radvm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRadvm), DictParams, k_adapteds, adapteds, dimensions)
-        ALretp, ULretp, mask_Lretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLretp), DictParams, k_adapteds, adapteds, dimensions)
-        ARretp, URretp, mask_Rretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRretp), DictParams, k_adapteds, adapteds, dimensions)
-        ALadvp, ULadvp, mask_Ladvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLadvp), DictParams, k_adapteds, adapteds, dimensions)
-        ARadvp, URadvp, mask_Radvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRadvp), DictParams, k_adapteds, adapteds, dimensions)
+        k_adapteds, adapteds, dimensions = [], [], []
+        ALretp, ULretp, mask_Lretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLretp), DictParams, k_adapteds, adapteds, dimensions, inv_index=False)
+        ARretp, URretp, mask_Rretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRretp), DictParams, k_adapteds, adapteds, dimensions, inv_index=False)
+        ALadvp, ULadvp, mask_Ladvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLadvp), DictParams, k_adapteds, adapteds, dimensions, inv_index=False)
+        ARadvp, URadvp, mask_Radvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRadvp), DictParams, k_adapteds, adapteds, dimensions, inv_index=False)
 
         t2 = time.time()
         print("The orthogonalization process: %s" % (t2-t1))
@@ -582,7 +597,11 @@ if __name__ == "__main__":
     # colors = [value for key, value in mcolors.CSS4_COLORS.items()]
     colors = [value for key, value in mcolors.XKCD_COLORS.items()]
     # color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan']
-    labels = ["|m|=0", "|m|=1", "|m|=2", "|m|=3", "|m|=4", "|m|=5", "|m|=6", "|m|=7"]
+    #### plot adapted phonon
+    color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'yellow', 'pink', 'olive', 'sage', 'slategray', 'darkkhaki', 'yellowgreen']
+    # color = plt.cm.viridis(np.linspace(0, 1, len(frequencies)))
+    labels = ["|m|=0","|m|=1","|m|=2","|m|=3","|m|=4","|m|=5","|m|=6","|m|=7","|m|=8","|m|=9", "|m|=10", "|m|=11","|m|=12", "|m|=13", "|m|=14"]
+    dim_sum = np.cumsum(dimensions)
     linestyle_tuple = ['solid',
         ('long dash with offset', (5, (10, 3))),
         ('loosely dashed', (0, (5, 10))),]

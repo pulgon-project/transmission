@@ -607,7 +607,7 @@ if __name__ == "__main__":
     plt.xlabel("$\omega\;(\mathrm{rad/ps})$", fontsize=12)
     plt.ylabel(r"$T(\omega)$", fontsize=12)
 
-    # plt.savefig(os.path.join(path_directory, "transmission_sym_adapted_defect.png"), dpi=600)
+    # plt.savefig(os.path.join(path_directory, "transmission_sym_adapted_defect_21.png"), dpi=600)
     plt.show()
 
 
