@@ -56,6 +56,39 @@ matplotlib.rcParams["font.size"] = 16.0
 
 
 def compute_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR, args):
+    """
+    Compute the transmission coefficient by mode-resolved AGF of a system given
+    Hamiltonian and coupling matrices.
+
+    This function calculates the retarded and advanced Green's functions for the leads
+    and the interface, evaluates the group velocity matrices, and solves the
+    corresponding eigenvalue equations. It identifies propagating modes, computes
+    the transmission coefficients, and returns the individual transmission.
+
+    Parameters:
+        iomega (int): Index of the frequency point.
+        omega (float): Frequency for which the transmission is computed.
+        HL (ndarray): Left lead coupling Hamiltonian matrix (HL01).
+        TL (ndarray): Hamiltonian matrix in the left lead (HL00).
+        HR (ndarray): Right lead coupling Hamiltonian matrix (HR01).
+        TR (ndarray): Coupling matrix between the right lead and the central region (HR00).
+        VLC (ndarray): Coupling matrix between left and central regions (HLC).
+        KC (ndarray): Central region Hamiltonian matrix (HC).
+        VCR (ndarray): Coupling matrix between central and right regions (HCR).
+        aL (float): Lattice parameter in Z direction of the left lead.
+        aR (float): Lattice parameter in Z direction of the right lead.
+        args (Namespace): Additional arguments including tolerances and settings.
+
+    Returns:
+        iomega (int): Input frequency index.
+        omega (float): Input frequency.
+        NLp (float): Number of right-propagating channels in the left lead.
+        trans (float): Total transmission.
+        trans_check (float): Sum of the individual transmission modes.
+        k_w (ndarray): The q-point of the phonon that omega passes through.
+        trans_values (ndarray): Transmission probabilities for each mode.
+    """
+
     HL_complex = HL.astype(complex)
     TL_complex = TL.astype(complex)
     HR_complex = HR.astype(complex)

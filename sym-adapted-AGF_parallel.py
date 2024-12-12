@@ -52,7 +52,7 @@ from phonopy.units import VaspToTHz
 from pymatgen.core.operations import SymmOp
 import logging
 from ase import Atoms
-from utilities import counting_y_from_xy, get_adapted_matrix, divide_irreps, divide_over_irreps, get_adapted_matrix_multiq
+from utilities import counting_y_from_xy, get_adapted_matrix, divide_irreps, divide_over_irreps, get_adapted_matrix_multiq, divide_over_irreps_using_projectors
 import matplotlib.colors as mcolors
 import multiprocessing
 from functools import partial
@@ -62,6 +62,35 @@ matplotlib.rcParams["font.size"] = 16.0
 
 
 def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR, args):
+    """
+    Computes the transmission coefficient by sym-adapted AGF of a system given
+    Hamiltonian and coupling matrices.
+
+    Parameters:
+        iomega (int): Index of the frequency point.
+        omega (float): Frequency for which the transmission is computed.
+        HL (ndarray): Left lead coupling Hamiltonian matrix (HL01).
+        TL (ndarray): Hamiltonian matrix in the left lead (HL00).
+        HR (ndarray): Right lead coupling Hamiltonian matrix (HR01).
+        TR (ndarray): Coupling matrix between the right lead and the central region (HR00).
+        VLC (ndarray): Coupling matrix between left and central regions (HLC).
+        KC (ndarray): Central region Hamiltonian matrix (HC).
+        VCR (ndarray): Coupling matrix between central and right regions (HCR).
+        aL (float): Lattice parameter in Z direction of the left lead.
+        aR (float): Lattice parameter in Z direction of the right lead.
+        args (Namespace): Additional arguments including tolerances and settings.
+
+    Returns:
+        iomega (int): Input frequency index.
+        omega (float): Input frequency.
+        NLp (float): Number of right-propagating channels in the left lead.
+        trans (float): Total transmission.
+        trans_check (float): Sum of the individual transmission modes.
+        k_w (ndarray): The q-point of the phonon that omega passes through.
+        trans_modes (ndarray): Symmetry adapted transmission probabilities for each mode.
+        irreps (list): Irreducible representations of modes.
+        matrices_prob (ndarray): Symmetry adapted transmission probability matrices.
+    """
     HL_complex = HL.astype(complex)
     TL_complex = TL.astype(complex)
     HR_complex = HR.astype(complex)
@@ -140,8 +169,8 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
 
     def orthogonalize(values, vectors, DictParams, k_adapteds, adapteds, dimensions, inv_index=False):
         mask = np.isclose(np.abs(values), 1.0, args.rtol, args.mtol)
-        # order_val = np.lexsort((np.arccos(values.real), 1 * (~mask)))
-        order_val = np.lexsort((np.angle(values), 1 * (~mask)))
+        order_val = np.lexsort((np.arccos(values.real), 1 * (~mask)))
+        # order_val = np.lexsort((np.angle(values), 1 * (~mask)))
 
         values = values[order_val]
         vectors = vectors[:, order_val]
@@ -156,8 +185,8 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
                 break
 
             if hi >= mask.sum() or not np.isclose(
-                    np.angle(values[hi]) / aL, np.angle(values[hi - 1]) / aL, rtol=args.rtol, atol=args.atol,
-                    # np.arccos(values[hi].real) / aL, np.arccos(values[hi - 1].real) / aL, rtol=args.rtol, atol=args.atol,
+                    # np.angle(values[hi]) / aL, np.angle(values[hi - 1]) / aL, rtol=args.rtol, atol=args.atol,
+                    np.arccos(values[hi].real) / aL, np.arccos(values[hi - 1].real) / aL, rtol=args.rtol, atol=args.atol,
             ):
                 groups.append((lo, hi))
                 lo = hi
@@ -173,8 +202,8 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
         irreps = []
         for g in groups:
             lo, hi = g
-            k_w_group = np.angle(values[lo]) / aL
-            # k_w_group = np.arccos(values[lo:hi][0].real) / aL
+            # k_w_group = np.angle(values[lo]) / aL
+            k_w_group = np.arccos(values[lo:hi][0].real) / aL
             DictParams["qpoints"] = k_w_group
 
             if k_w_group in k_adapteds:
@@ -198,17 +227,13 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
             try:
                 adapted_vecs = divide_over_irreps(group_vectors, basis, dims, rcond=rcond)
             except Exception as e:
-                if omega!=None:
-                    print("omega:", omega)
-                print("k_w_group:", k_w_group)
-                print(e)
-                continue
+                adapted_vecs = divide_over_irreps_using_projectors(group_vectors, basis, dims)
+
             tmp_vec = []
             for i_ir, v in enumerate(adapted_vecs):
-                if v.shape[1] > 0:
+                if v.size > 0:
                     tmp_vec.append(v)
                     irreps.extend(np.repeat(i_ir, v.shape[1]))
-                    # print(f"\t- {v.shape[1]} modes in irrep #{i_ir+1}")
             tmp_vec = np.concatenate(tmp_vec, axis=1)
             vectors[:, lo:hi] = tmp_vec
         return values, vectors, mask, irreps, k_adapteds, adapteds, dimensions
@@ -218,24 +243,26 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
     DictParams = {"nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4, 13
 
     k_adapteds, adapteds, dimensions = [], [], []
+    inv_ind1 = True
     ALadvm, ULadvm, mask_Ladvm, irreps, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLadvm),
                                                                                              DictParams, k_adapteds,
-                                                                                             adapteds, dimensions, inv_index=True)
+                                                                                             adapteds, dimensions, inv_index=inv_ind1)
     ALretm, ULretm, mask_Lretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLretm), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions, inv_index=True)
+                                                                                    k_adapteds, adapteds, dimensions, inv_index=inv_ind1)
     ARretm, URretm, mask_Rretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRretm), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions, inv_index=True)
+                                                                                    k_adapteds, adapteds, dimensions, inv_index=inv_ind1)
     ARadvm, URadvm, mask_Radvm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRadvm), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions, inv_index=True)
+                                                                                    k_adapteds, adapteds, dimensions, inv_index=inv_ind1)
     k_adapteds, adapteds, dimensions = [], [], []
+    inv_ind2 = False
     ALretp, ULretp, mask_Lretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLretp), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions,inv_index=False)
+                                                                                    k_adapteds, adapteds, dimensions,inv_index=inv_ind2)
     ARretp, URretp, mask_Rretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRretp), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions,inv_index=False)
+                                                                                    k_adapteds, adapteds, dimensions,inv_index=inv_ind2)
     ALadvp, ULadvp, mask_Ladvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLadvp), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions,inv_index=False)
+                                                                                    k_adapteds, adapteds, dimensions,inv_index=inv_ind2)
     ARadvp, URadvp, mask_Radvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRadvp), DictParams,
-                                                                                    k_adapteds, adapteds, dimensions,inv_index=False)
+                                                                                    k_adapteds, adapteds, dimensions,inv_index=inv_ind2)
 
     # Compute the group velocity matrices.
     # yapf: disable
@@ -372,7 +399,7 @@ if __name__ == "__main__":
         "-e",
         "--eps",
         type=float,
-        default=1e-8,
+        default=1e-5,
         help="prefactor for the imaginary part of the energies",
     )
     parser.add_argument(
@@ -462,7 +489,8 @@ if __name__ == "__main__":
     poscar_phonopy = phonon.primitive
     poscar_ase = Atoms(cell=poscar_phonopy.cell, positions=poscar_phonopy.positions, numbers=poscar_phonopy.numbers)
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
-    atom = cyclic._primitive
+    # atom = cyclic._primitive
+    atom = poscar_ase
     atom_center = find_axis_center_of_nanotube(atom)
 
     ################### family 4 #####################
@@ -489,29 +517,28 @@ if __name__ == "__main__":
     # sym.append(rots.affine_matrix)
     #########################################
     ################## family 6 ########################
-    # family = 6
-    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    # nrot = obj.rot_sym[0][1]
-    # num_irreps = int(nrot/2)+1
-    # sym  = []
-    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # sym.append(rots.affine_matrix)
-    # sym.append(obj.get_generators()[1])
-    ################ family 8 ##################
-    family = 8
+    family = 6
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    nrot = obj.get_rotational_symmetry_number()
+    nrot = obj.rot_sym[0][1]
+    num_irreps = int(nrot/2)+1
     sym  = []
-    num_irreps = nrot + 1
-    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/4])
     rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    mirror = SymmOp.reflection([1,0,0], [0,0,0])
-    sym.append(tran.affine_matrix)
     sym.append(rots.affine_matrix)
-    sym.append(mirror.affine_matrix)
+    sym.append(obj.get_generators()[1])
+    ################ family 8 ######################
+    # family = 8
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.get_rotational_symmetry_number()
+    # sym  = []
+    # num_irreps = nrot + 1
+    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    # # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/4])
+    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    # mirror = SymmOp.reflection([1,0,0], [0,0,0])
+    # sym.append(tran.affine_matrix)
+    # sym.append(rots.affine_matrix)
+    # sym.append(mirror.affine_matrix)
     ################################################
-
     ops, order_ops = brute_force_generate_group_subsquent(sym)
     if len(ops) != len(order_ops):
         logging.ERROR("len(ops) != len(order)")
@@ -634,7 +661,11 @@ if __name__ == "__main__":
     colors = [value for key, value in mcolors.XKCD_COLORS.items()]
     # colors = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'yellow', 'pink', 'olive', 'slategray', 'darkkhaki', 'yellowgreen']
     # color = plt.cm.viridis(np.linspace(0, 1, len(frequencies)))
-    labels = ["|m|=0","|m|=1","|m|=2","|m|=3","|m|=4","|m|=5","|m|=6","|m|=7","|m|=8","|m|=9", "|m|=10", "|m|=11","|m|=12", "|m|=13", "|m|=14"]
+
+    labels = []
+    for ii in range(40):
+        labels.append("|m|=%d" %ii)
+    # labels = ["|m|=0","|m|=1","|m|=2","|m|=3","|m|=4","|m|=5","|m|=6","|m|=7","|m|=8","|m|=9", "|m|=10", "|m|=11","|m|=12", "|m|=13", "|m|=14"]
 
 
     linestyle_tuple = ['solid',

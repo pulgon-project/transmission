@@ -54,7 +54,7 @@ from phonopy.units import VaspToTHz
 from pymatgen.core.operations import SymmOp
 import logging
 from ase import Atoms
-from utilities import counting_y_from_xy, get_adapted_matrix, divide_irreps, divide_over_irreps, get_adapted_matrix_multiq
+from utilities import counting_y_from_xy, get_adapted_matrix, divide_irreps, divide_over_irreps, get_adapted_matrix_multiq, divide_over_irreps_using_projectors
 import matplotlib.colors as mcolors
 
 
@@ -170,10 +170,10 @@ if __name__ == "__main__":
     family = 8
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     nrot = obj.get_rotational_symmetry_number()
+
     sym  = []
     num_irreps = nrot + 1
     tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/4])
     rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
     mirror = SymmOp.reflection([1,0,0], [0,0,0])
     sym.append(tran.affine_matrix)
@@ -190,6 +190,18 @@ if __name__ == "__main__":
     # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
     # sym.append(rots.affine_matrix)
     ############################################
+    ################### family 4 #####################
+    # family = 4
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.get_rotational_symmetry_number()
+    # num_irreps = nrot * 2
+    # sym = []
+    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    # sym.append(tran.affine_matrix)
+    # rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    # sym.append(rot.affine_matrix)
+    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    # sym.append(mirror.affine_matrix)
     ################## family 6 ########################
     # family = 6
     # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
@@ -276,9 +288,7 @@ if __name__ == "__main__":
     matrices_prob, Irreps = [], []
     NLp_irreps = np.zeros((num_irreps, NPOINTS))  # the number of im
     for iomega, omega in enumerate(tqdm.tqdm(inc_omega, dynamic_ncols=True)):
-
-        if iomega == 0:
-            continue
+        # iomega, omega = 0, 64.76899677966712
 
         print("---------------------")
         print("omega=", omega)
@@ -362,11 +372,11 @@ if __name__ == "__main__":
         print("The time of G matrix: %s" % (t1-t0))
         def orthogonalize(values, vectors, DictParams, k_adapteds, adapteds, dimensions, inv_index=False):
             mask = np.isclose(np.abs(values), 1.0, args.rtol, args.mtol)
-
-            # order_val = np.lexsort((np.arccos(values.real), 1 * (~mask)))
-            order_val = np.lexsort((np.angle(values), 1 * (~mask)))
+            order_val = np.lexsort((np.arccos(values.real), 1 * (~mask)))
+            # order_val = np.lexsort((np.angle(values), 1 * (~mask)))
             values = values[order_val]
             vectors = vectors[:, order_val]
+            mask = np.isclose(np.abs(values), 1.0, args.rtol, args.mtol)
 
             lo = 0
             hi = 1
@@ -376,8 +386,8 @@ if __name__ == "__main__":
                     break
 
                 if hi >= mask.sum() or not np.isclose(
-                np.angle(values[hi]) / aL, np.angle(values[hi - 1]) / aL, rtol=args.rtol, atol=args.atol,
-                # np.arccos(values[hi].real) / aL, np.arccos(values[hi - 1].real) / aL, rtol=args.rtol, atol=args.atol,
+                # np.angle(values[hi]) / aL, np.angle(values[hi - 1]) / aL, rtol=args.rtol, atol=args.atol,
+                np.arccos(values[hi].real) / aL, np.arccos(values[hi - 1].real) / aL, rtol=args.rtol, atol=args.atol,
                 ):
                     groups.append((lo, hi))
                     lo = hi
@@ -388,7 +398,7 @@ if __name__ == "__main__":
                 lo, hi = g
                 if hi > lo + 1:
                     values[lo:hi] = values[lo:hi].mean()
-                    # vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
+                    vectors[:, lo:hi] = la.orth(vectors[:, lo:hi])
 
             irreps = []
             for g in groups:
@@ -396,7 +406,6 @@ if __name__ == "__main__":
                 # k_w_group = np.arccos(values[lo].real) / aL
                 k_w_group = np.angle(values[lo]) / aL
                 DictParams["qpoints"] = k_w_group
-                # DictParams["qpoints"] = 0
 
                 if k_w_group in k_adapteds:
                     itp = k_adapteds.index(k_w_group)
@@ -410,8 +419,8 @@ if __name__ == "__main__":
                     matrices = get_matrices_withPhase(atom_center, ops_car_sym, k_w_group)
                     # matrices = get_matrices_withPhase(atom_center, ops_car_sym, 0)
                     matrices = matrices * np.exp(1j * k_w_group * factor_pos)
-
                     basis, dims = get_adapted_matrix(DictParams, num_atoms, matrices)
+
                     k_adapteds.append(k_w_group)
                     adapteds.append(basis)
                     dimensions.append(dims)
@@ -420,14 +429,13 @@ if __name__ == "__main__":
                 try:
                     adapted_vecs = divide_over_irreps(group_vectors, basis, dims, rcond=rcond)
                 except Exception as e:
-                    print("k_w_group:", k_w_group)
-                    print(e)
+                    print("now go into divide_over_irreps_using_projectors")
+                    adapted_vecs = divide_over_irreps_using_projectors(group_vectors, basis, dims)
 
-                    set_trace()
-                    continue
                 tmp_vec = []
                 for i_ir, v in enumerate(adapted_vecs):
-                    if v.shape[1] > 0:
+                    # if v.shape[1] > 0:
+                    if v.size > 0:
                         tmp_vec.append(v)
                         irreps.extend(np.repeat(i_ir, v.shape[1]))
                         # print(f"\t- {v.shape[1]} modes in irrep #{i_ir+1}")
@@ -440,16 +448,18 @@ if __name__ == "__main__":
         DictParams = {"nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4, 13
 
         k_adapteds, adapteds, dimensions = [], [], []
-        ALadvm, ULadvm, mask_Ladvm, tmp_irreps, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLadvm), DictParams, k_adapteds, adapteds, dimensions, inv_index=True)
-        ALretm, ULretm, mask_Lretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLretm), DictParams, k_adapteds, adapteds, dimensions, inv_index=True)
-        ARretm, URretm, mask_Rretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRretm), DictParams, k_adapteds, adapteds, dimensions, inv_index=True)
-        ARadvm, URadvm, mask_Radvm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRadvm), DictParams, k_adapteds, adapteds, dimensions, inv_index=True)
+        inv_ind1 = True
+        ALadvm, ULadvm, mask_Ladvm, tmp_irreps, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLadvm), DictParams, k_adapteds, adapteds, dimensions, inv_index=inv_ind1)
+        ALretm, ULretm, mask_Lretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FLretm), DictParams, k_adapteds, adapteds, dimensions, inv_index=inv_ind1)
+        ARretm, URretm, mask_Rretm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRretm), DictParams, k_adapteds, adapteds, dimensions, inv_index=inv_ind1)
+        ARadvm, URadvm, mask_Radvm, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(inv_FRadvm), DictParams, k_adapteds, adapteds, dimensions, inv_index=inv_ind1)
 
         k_adapteds, adapteds, dimensions = [], [], []
-        ALretp, ULretp, mask_Lretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLretp), DictParams, k_adapteds, adapteds, dimensions, inv_index=False)
-        ARretp, URretp, mask_Rretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRretp), DictParams, k_adapteds, adapteds, dimensions, inv_index=False)
-        ALadvp, ULadvp, mask_Ladvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLadvp), DictParams, k_adapteds, adapteds, dimensions, inv_index=False)
-        ARadvp, URadvp, mask_Radvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRadvp), DictParams, k_adapteds, adapteds, dimensions, inv_index=False)
+        inv_ind2 = False
+        ALretp, ULretp, mask_Lretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLretp), DictParams, k_adapteds, adapteds, dimensions, inv_index=inv_ind2)
+        ARretp, URretp, mask_Rretp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRretp), DictParams, k_adapteds, adapteds, dimensions, inv_index=inv_ind2)
+        ALadvp, ULadvp, mask_Ladvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FLadvp), DictParams, k_adapteds, adapteds, dimensions, inv_index=inv_ind2)
+        ARadvp, URadvp, mask_Radvp, _, k_adapteds, adapteds, dimensions = orthogonalize(*la.eig(FRadvp), DictParams, k_adapteds, adapteds, dimensions, inv_index=inv_ind2)
 
         t2 = time.time()
         print("The orthogonalization process: %s" % (t2-t1))
@@ -571,11 +581,13 @@ if __name__ == "__main__":
         )
 
         #  Discard evanescent modes.
+
         tRL = tRL[mask_Rretp, :][:, mask_Ladvm]
         trans_modes = np.diag(tRL.conj().T @ tRL).real
         trans_check[iomega] = trans_modes.sum()
 
-        matrices_prob.append(np.diag(trans_modes))
+        matrices_prob.append(np.abs(tRL) ** 2)
+        Irreps.append(tmp_irreps)
         for im, tras in enumerate(trans_modes):
             try:
                 NLp_irreps[tmp_irreps[im], iomega] += tras
@@ -593,14 +605,15 @@ if __name__ == "__main__":
     t0 = time.time()
     fig, axs = plt.subplots(figsize=(12, 8))
 
-    # colors = [value for key, value in mcolors.TABLEAU_COLORS.items()]
-    # colors = [value for key, value in mcolors.CSS4_COLORS.items()]
-    colors = [value for key, value in mcolors.XKCD_COLORS.items()]
-    # color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan']
     #### plot adapted phonon
-    color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'yellow', 'pink', 'olive', 'sage', 'slategray', 'darkkhaki', 'yellowgreen']
+    # color = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'yellow', 'pink', 'olive', 'sage', 'slategray', 'darkkhaki', 'yellowgreen']
     # color = plt.cm.viridis(np.linspace(0, 1, len(frequencies)))
-    labels = ["|m|=0","|m|=1","|m|=2","|m|=3","|m|=4","|m|=5","|m|=6","|m|=7","|m|=8","|m|=9", "|m|=10", "|m|=11","|m|=12", "|m|=13", "|m|=14"]
+    # labels = ["|m|=0","|m|=1","|m|=2","|m|=3","|m|=4","|m|=5","|m|=6","|m|=7","|m|=8","|m|=9", "|m|=10", "|m|=11","|m|=12", "|m|=13", "|m|=14"]
+    colors = [value for key, value in mcolors.XKCD_COLORS.items()]
+    labels = []
+    for ii in range(40):
+        labels.append("|m|=%d" %ii)
+
     dim_sum = np.cumsum(dimensions)
     linestyle_tuple = ['solid',
         ('long dash with offset', (5, (10, 3))),
@@ -622,8 +635,8 @@ if __name__ == "__main__":
     plt.xlabel("$\omega\;(\mathrm{rad/ps})$")
     plt.ylabel(r"$T(\omega)$")
     plt.tick_params(labelsize=14)
-    plt.savefig(os.path.join(path_directory, "transmission_sym_adapted_defect.png"), dpi=600)
-    np.savez(path_savedata, inc_omega=inc_omega, NLp_irreps=NLp_irreps, NLp=NLp, NRp=NRp, NLm=NLm, NRm=NRm, trans=trans, trans_check=trans_check, NLp_sum=NLp_sum)
+    # plt.savefig(os.path.join(path_directory, "transmission_sym_adapted_defect.png"), dpi=600)
+    # np.savez(path_savedata, inc_omega=inc_omega, NLp_irreps=NLp_irreps, NLp=NLp, NRp=NRp, NLm=NLm, NRm=NRm, trans=trans, trans_check=trans_check, NLp_sum=NLp_sum, matrices_prob=matrices_prob, Irreps=Irreps)
 
     t1 = time.time()
     print("plot and save the figure: %s" % (t1 - t0))
