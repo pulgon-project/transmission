@@ -100,7 +100,6 @@ def get_adapted_matrix(DictParams, num_atom, matrices):
             # print("error: ", error)
         dimension.append(basis.shape[1])
         adapted.append(basis)
-
     adapted = np.concatenate(adapted, axis=1)
     if adapted.shape[0] != adapted.shape[1] or adapted.shape[0] != ndof:
         logging.ERROR("the shape of adapted is incorrect, adapted.shape=", adapted.shape)

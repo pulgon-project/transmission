@@ -180,7 +180,6 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
         hi = 1
         groups = []
         while True:
-
             if mask.sum() == 0:
                 break
 
@@ -217,8 +216,8 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
                     factor_pos = factor_pos.T
                 matrices = get_matrices_withPhase(atom_center, ops_car_sym, k_w_group)
                 matrices = matrices * np.exp(1j * k_w_group * factor_pos)
-
                 basis, dims = get_adapted_matrix(DictParams, num_atoms, matrices)
+
                 k_adapteds.append(k_w_group)
                 adapteds.append(basis)
                 dimensions.append(dims)
