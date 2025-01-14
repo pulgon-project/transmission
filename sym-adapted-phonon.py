@@ -18,10 +18,14 @@ from pulgon_tools_wip.utils import (
     Cn,
     S2n,
     brute_force_generate_group_subsquent,
+    get_symbols_from_ops
 )
+from pulgon_tools_wip.line_group_table import get_family_Num_from_sym_symbol
+
 from pymatgen.core.operations import SymmOp
 from tqdm import tqdm
-from utilities import counting_y_from_xy, get_adapted_matrix, commuting
+
+from utilities import  get_adapted_matrix
 import decimation
 from spglib import get_symmetry_dataset
 import ase
@@ -31,17 +35,26 @@ import matplotlib.colors as mcolors
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("data_directory", help="directory")
+    parser.add_argument( "data_directory", help="directory")
+    parser.add_argument(
+        "-r",
+        "--raw",
+        action="store_true",
+        default=False,
+        help="plot the raw phonon or not",
+    )
+    parser.add_argument(
+        "-k",
+        "--kpoints",
+        type=int,
+        default=11,
+        help="plot the raw phonon or not",
+    )
+
     args = parser.parse_args()
     path_0 = args.data_directory
-
-
-    # path_0 = "datas/WS2-MoS2_NNFF-epoch2000-1/6x6-u1-3-WMo-S12-1"
-    # path_0 = "datas/WS2/10x0-u1-3-WMo-C1-1"
-    # path_0 = "datas/carbon_nanotube/4x1-u1-3-defect-C-1"
-    # path_0 = "datas/carbon_nanotube/5x0-10x0-u1-3-defect-C5v-1"
-    # path_0 = "datas/WS2-MoS2/10x0-20x0-u1-5-defect-S-1"
-    # path_0 = "datas/WS2-MoS2/10x0-20x0-u1-5-defect-S-C10v-3"
+    raw = args.raw
+    num_k = args.kpoints
 
     path_yaml = os.path.join(path_0, "phonopy_pure.yaml")
     path_fc_continum = os.path.join(path_0, "FORCE_CONSTANTS_pure.continuum")
@@ -58,7 +71,7 @@ def main():
     atom = cyclic._atom
     atom_center = find_axis_center_of_nanotube(atom)
 
-    NQS = 51
+    NQS = num_k
     k_start = -np.pi
     # k_start = 0
     k_end = np.pi
@@ -71,7 +84,25 @@ def main():
     qpoints_1dim = qpoints[:,2] * 2 * np.pi
     qpoints_1dim = qpoints_1dim / aL
 
-    ################ family 4 ##################
+
+    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    nrot = obj.get_rotational_symmetry_number()
+    aL = atom_center.cell[2, 2]
+    trans_sym = cyclic.cyclic_group[0]
+    rota_sym = obj.sch_symbol
+
+    family = get_family_Num_from_sym_symbol(trans_sym, rota_sym)
+
+
+    trans_op = cyclic.get_generators()
+    rots_op = obj.get_generators()
+    mats = [trans_op] + rots_op
+
+    symbols = get_symbols_from_ops(rots_op)
+
+
+
+    # ############### family 4 ##################
     # family = 4
     # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     # nrot = obj.get_rotational_symmetry_number()
@@ -82,18 +113,18 @@ def main():
     # sym.append(tran.affine_matrix)
     # sym.append(rots.affine_matrix)
     # sym.append(mirror.affine_matrix)
-    ################# family 8 ###################
-    # family = 8
-    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    # nrot = obj.get_rotational_symmetry_number()
-    # sym  = []
-    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # mirror = SymmOp.reflection([1,0,0], [0,0,0])
-    # sym.append(tran.affine_matrix)
-    # sym.append(rots.affine_matrix)
-    # sym.append(mirror.affine_matrix)
-    ################### family 2 ###################
+    # ################ family 8 ###################
+    family = 8
+    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    nrot = obj.get_rotational_symmetry_number()
+    sym  = []
+    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
+    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    mirror = SymmOp.reflection([1,0,0], [0,0,0])
+    sym.append(tran.affine_matrix)
+    sym.append(rots.affine_matrix)
+    sym.append(mirror.affine_matrix)
+    # ################## family 2 ###################
     # family = 2
     # num_irreps = 6
     # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
@@ -103,26 +134,29 @@ def main():
     # # sym.append(pg1[1])
     # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
     # sym.append(rots.affine_matrix)
-    ################ family 6 ######################
-    family = 6
-    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    nrot = obj.rot_sym[0][1]
-    sym  = []
-    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    # sym.append(tran.affine_matrix)
-    sym.append(rots.affine_matrix)
-    sym.append(obj.get_generators()[1])
-    #################################################
-    ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-2)
+    # ############### family 6 ######################
+    # family = 6
+    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    # nrot = obj.rot_sym[0][1]
+    # sym  = []
+    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    # # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
+    # # sym.append(tran.affine_matrix)
+    # sym.append(rots.affine_matrix)
+    # sym.append(obj.get_generators()[1])
+    # ################################################
+    # ops, order_ops = brute_force_generate_group_subsquent(mats, symec=1e-4)
+    ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-4)
 
     ops_car_sym = []
     for op in ops:
-        tmp_sym1 = SymmOp.from_rotation_and_translation(
+        tmp_sym = SymmOp.from_rotation_and_translation(
             op[:3, :3], op[:3, 3] * aL
         )
-        ops_car_sym.append(tmp_sym1)
+        ops_car_sym.append(tmp_sym)
     # matrices = get_matrices(atom_center, ops_car_sym)
+
+
 
     frequencies, distances, bands = [], [], []
     num_atom = len(poscar_ase.numbers)
@@ -136,7 +170,7 @@ def main():
         #     factor_pos = factor_pos.T
         matrices = get_matrices_withPhase(atom_center, ops_car_sym, qp)
         # matrices = get_matrices_withPhase(atom_center, ops_car_sym, 0)
-        matrices = matrices * np.exp(1j * qp * factor_pos)
+        # matrices = matrices * np.exp(1j * qp * factor_pos)
         adapted, dimensions = get_adapted_matrix(DictParams, num_atom, matrices)
 
         qz = qpoints[ii]
@@ -158,34 +192,36 @@ def main():
             tmp_band.append(e)
             start = end
         bands.append(np.concatenate(tmp_band))
-        distances.append(qp)
-    frequencies = np.array(bands).swapaxes(0, 1) * 2 * np.pi
+        distances.append(qp * aL)
+    frequencies = np.array(bands).swapaxes(0, 1) # * 2 * np.pi
 
     fig, ax = plt.subplots()
-    frequencies_raw = []
-    for ii, qp in enumerate(tqdm(qpoints_1dim)):   # loop q points
-        qz = qpoints[ii]
-        D = phonon.get_dynamical_matrix_at_q(qz)
-        # D = TL.conj().transpose() * np.exp(-1j*qp*aL) + HL + TL * np.exp(1j*qp*aL)
+    if raw == True:
+        frequencies_raw = []
+        for ii, qp in enumerate(tqdm(qpoints_1dim)):   # loop q points
+            qz = qpoints[ii]
+            D = phonon.get_dynamical_matrix_at_q(qz)
+            # D = TL.conj().transpose() * np.exp(-1j*qp*aL) + HL + TL * np.exp(1j*qp*aL)
 
-        eigvals, eigvecs = np.linalg.eigh(D)
-        eigvals = eigvals.real
-        frequencies_raw.append(np.sqrt(abs(eigvals)) * np.sign(eigvals) * VaspToTHz)
-    frequencies_raw = np.array(frequencies_raw).T * 2 * np.pi
-    ### raw phonon
-    for i, f_raw in enumerate(frequencies_raw):
-        if i == 0:
-            ax.plot(distances, f_raw, color="grey", label="raw")
-        else:
-            ax.plot(distances, f_raw, color="grey")
+            eigvals, eigvecs = np.linalg.eigh(D)
+            eigvals = eigvals.real
+            frequencies_raw.append(np.sqrt(abs(eigvals)) * np.sign(eigvals) * VaspToTHz)
+        frequencies_raw = np.array(frequencies_raw).T  # * 2 * np.pi
+        ### raw phonon
+        for i, f_raw in enumerate(frequencies_raw):
+            if i == 0:
+                ax.plot(distances, f_raw, color="grey", label="raw")
+            else:
+                ax.plot(distances, f_raw, color="grey")
 
     #### plot adapted phonon
-    color = [value for key, value in mcolors.XKCD_COLORS.items()]
+    # color = [value for key, value in mcolors.XKCD_COLORS.items()]
+    # color = plt.cm.tab10.colors
+    color = plt.cm.tab20.colors
     labels = []
     for ii in range(40):
         labels.append("|m|=%d" %ii)
         dim_sum = np.cumsum(dimensions)
-
 
     if family==4:
         for ii, freq in enumerate(frequencies):
@@ -217,10 +253,19 @@ def main():
                 ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir))])
     np.savez(path_savedata, distances=np.array(distances), frequencies=frequencies, dim_sum=dim_sum)
 
-    plt.xlabel("qpoints_onedim")
-    plt.ylabel("frequencies * 2 * pi (Thz)")
-    plt.legend()
-    plt.savefig(path_save_phonon, dpi=600)
+    # plt.xlabel("$k\cdot a$" + " ($\AA$)")
+    labelsize = 14
+    fontsize = 16
+
+    plt.xlabel("q", fontsize=fontsize)
+    plt.ylabel(r"$\omega$" + " (Thz)", fontsize=fontsize)
+    # plt.legend(fontsize=10, loc="best")
+    plt.legend(fontsize=12, loc="upper right")
+
+    plt.tight_layout()
+    plt.tick_params(labelsize=labelsize)
+
+    plt.savefig(path_save_phonon, dpi=500)
     plt.show()
 
 

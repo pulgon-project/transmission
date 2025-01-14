@@ -52,7 +52,7 @@ from phonopy.units import VaspToTHz
 from pymatgen.core.operations import SymmOp
 import logging
 from ase import Atoms
-from utilities import counting_y_from_xy, get_adapted_matrix, divide_irreps, divide_over_irreps, get_adapted_matrix_multiq, divide_over_irreps_using_projectors
+from utilities import get_adapted_matrix, divide_irreps, divide_over_irreps, divide_over_irreps_using_projectors
 import matplotlib.colors as mcolors
 import multiprocessing
 from functools import partial

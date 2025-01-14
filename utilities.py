@@ -97,7 +97,6 @@ def get_adapted_matrix(DictParams, num_atom, matrices):
         error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
         if error>0.05:
             logging.ERROR("the error of svd is too large, error=", error)
-            # print("error: ", error)
         dimension.append(basis.shape[1])
         adapted.append(basis)
     adapted = np.concatenate(adapted, axis=1)
