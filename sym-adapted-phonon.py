@@ -17,20 +17,21 @@ from pulgon_tools_wip.utils import (
     find_axis_center_of_nanotube,
     Cn,
     S2n,
+    sigmaH,
     brute_force_generate_group_subsquent,
     get_symbols_from_ops
 )
 from pulgon_tools_wip.line_group_table import get_family_Num_from_sym_symbol
-
 from pymatgen.core.operations import SymmOp
+from sparse import astype
 from tqdm import tqdm
-
-from utilities import  get_adapted_matrix
+from utilities import get_adapted_matrix, get_adapted_matrix_withparities, get_modified_adapted_matrix
 import decimation
 from spglib import get_symmetry_dataset
 import ase
 import argparse
 import matplotlib.colors as mcolors
+from pymatgen.core.operations import SymmOp
 
 
 def main():
@@ -60,11 +61,13 @@ def main():
     path_fc_continum = os.path.join(path_0, "FORCE_CONSTANTS_pure.continuum")
     path_save_phonon = os.path.join(path_0, "phonon_defect_sym_adapted")
     path_savedata = os.path.join(path_0, "sym-adapted-phonon")
+    path_poscar = os.path.join(path_0, "POSCAR")
 
     phonon = phonopy.load(phonopy_yaml=path_yaml, force_constants_filename=path_fc_continum, is_compact_fc=True)
     # phonon = phonopy.load(phonopy_yaml=path_yaml, is_compact_fc=True)
     poscar_phonopy = phonon.primitive
     poscar_ase = Atoms(cell=poscar_phonopy.cell, positions=poscar_phonopy.positions, numbers=poscar_phonopy.numbers)
+    # poscar_ase = read_vasp(path_poscar)
 
     cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
     aL = poscar_ase.cell[2,2]
@@ -72,9 +75,11 @@ def main():
     atom_center = find_axis_center_of_nanotube(atom)
 
     NQS = num_k
-    k_start = -np.pi
+    k_start = -np.pi + 0.05
+    # k_start = np.pi
     # k_start = 0
-    k_end = np.pi
+    # k_start = 0.1
+    k_end = np.pi - 0.05
 
     path = [[[0, 0, k_start/2/np.pi], [0, 0, k_end/2/np.pi]]]
     qpoints, connections = get_band_qpoints_and_path_connections(
@@ -87,91 +92,51 @@ def main():
 
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     nrot = obj.get_rotational_symmetry_number()
+
+
     aL = atom_center.cell[2, 2]
     trans_sym = cyclic.cyclic_group[0]
     rota_sym = obj.sch_symbol
 
     family = get_family_Num_from_sym_symbol(trans_sym, rota_sym)
+    if family==13:
+        nrot = np.int32(nrot / 2)
+
+    trans_op = np.round(cyclic.get_generators(), 6)
+    rots_op = np.round(obj.get_generators(), 6)
+    # rots_op[1] = SymmOp.from_rotation_and_translation(rotation_matrix=sigmaH(), translation_vec=np.array([0, 0, 0.5])).affine_matrix
+    # rots_op = rots_op[1]
 
 
-    trans_op = cyclic.get_generators()
-    rots_op = obj.get_generators()
-    mats = [trans_op] + rots_op
-
+    mats = np.vstack(([trans_op], rots_op))
+    # mats = np.vstack(([trans_op], [rots_op]))
+    # symbols = get_symbols_from_ops([rots_op])
     symbols = get_symbols_from_ops(rots_op)
 
-
-
-    # ############### family 4 ##################
-    # family = 4
-    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    # nrot = obj.get_rotational_symmetry_number()
-    # sym  = []
-    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # mirror = SymmOp.reflection([0,0,1], [0,0,0.75])
-    # sym.append(tran.affine_matrix)
-    # sym.append(rots.affine_matrix)
-    # sym.append(mirror.affine_matrix)
-    # ################ family 8 ###################
-    family = 8
-    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    nrot = obj.get_rotational_symmetry_number()
-    sym  = []
-    tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    mirror = SymmOp.reflection([1,0,0], [0,0,0])
-    sym.append(tran.affine_matrix)
-    sym.append(rots.affine_matrix)
-    sym.append(mirror.affine_matrix)
-    # ################## family 2 ###################
-    # family = 2
-    # num_irreps = 6
-    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    # nrot = obj.get_rotational_symmetry_number()
-    # sym = []
-    # # pg1 = obj.get_generators()  # change the order to satisfy the character table
-    # # sym.append(pg1[1])
-    # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
-    # sym.append(rots.affine_matrix)
-    # ############### family 6 ######################
-    # family = 6
-    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    # nrot = obj.rot_sym[0][1]
-    # sym  = []
-    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    # # sym.append(tran.affine_matrix)
-    # sym.append(rots.affine_matrix)
-    # sym.append(obj.get_generators()[1])
-    # ################################################
-    # ops, order_ops = brute_force_generate_group_subsquent(mats, symec=1e-4)
-    ops, order_ops = brute_force_generate_group_subsquent(sym, symec=1e-4)
-
+    ops, order_ops = brute_force_generate_group_subsquent(mats, symec=1e-2)
     ops_car_sym = []
     for op in ops:
         tmp_sym = SymmOp.from_rotation_and_translation(
             op[:3, :3], op[:3, 3] * aL
         )
         ops_car_sym.append(tmp_sym)
-    # matrices = get_matrices(atom_center, ops_car_sym)
-
-
 
     frequencies, distances, bands = [], [], []
     num_atom = len(poscar_ase.numbers)
     for ii, qp in enumerate(tqdm(qpoints_1dim)):   # loop q points
         DictParams = {"qpoints":qp,  "nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4, 13
-
-        tmp1 = phonon.primitive.positions[:, 2].reshape(-1, 1)
-        factor_pos = tmp1 - tmp1.T
-        factor_pos = np.repeat(np.repeat(factor_pos, 3, axis=0), 3, axis=1).astype(np.complex128)
+        # DictParams = {"qpoints":0,  "nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4, 13
+        # tmp1 = phonon.primitive.positions[:, 2].reshape(-1, 1)
+        # factor_pos = tmp1 - tmp1.T
+        # factor_pos = np.repeat(np.repeat(factor_pos, 3, axis=0), 3, axis=1).astype(np.complex128)
         # if inv_index == True:
         #     factor_pos = factor_pos.T
-        matrices = get_matrices_withPhase(atom_center, ops_car_sym, qp)
-        # matrices = get_matrices_withPhase(atom_center, ops_car_sym, 0)
+        # matrices = get_matrices(atom_center, ops_car_sym, symprec=1e-5)
+        matrices = get_matrices_withPhase(atom_center, ops_car_sym, qp, symprec=1e-2)
+        # matrices = get_matrices_withPhase(atom_center, ops_car_sym, 0, symprec=1e-2)
         # matrices = matrices * np.exp(1j * qp * factor_pos)
         adapted, dimensions = get_adapted_matrix(DictParams, num_atom, matrices)
+        # adapted, dimensions = get_modified_adapted_matrix(DictParams, num_atom, matrices)
 
         qz = qpoints[ii]
         D = phonon.get_dynamical_matrix_at_q(qz)
@@ -220,7 +185,7 @@ def main():
     color = plt.cm.tab20.colors
     labels = []
     for ii in range(40):
-        labels.append("|m|=%d" %ii)
+        labels.append("m=%d" %ii)
         dim_sum = np.cumsum(dimensions)
 
     if family==4:
@@ -251,9 +216,15 @@ def main():
                 ax.plot(np.array(distances), freq, label=labels[int(abs(idx_ir))], color=color[int(abs(idx_ir))])
             else:
                 ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir))])
-    np.savez(path_savedata, distances=np.array(distances), frequencies=frequencies, dim_sum=dim_sum)
+    elif family==13:
+        for ii, freq in enumerate(frequencies):
+            idx_ir = (ii > dim_sum - 1).sum()
+            if ii in dim_sum-1:
+                ax.plot(np.array(distances), freq, label=labels[int(abs(idx_ir))], color=color[int(abs(idx_ir))])
+            else:
+                ax.plot(np.array(distances), freq, color=color[int(abs(idx_ir))])
 
-    # plt.xlabel("$k\cdot a$" + " ($\AA$)")
+    np.savez(path_savedata, distances=np.array(distances), frequencies=frequencies, dim_sum=dim_sum)
     labelsize = 14
     fontsize = 16
 
@@ -265,7 +236,7 @@ def main():
     plt.tight_layout()
     plt.tick_params(labelsize=labelsize)
 
-    plt.savefig(path_save_phonon, dpi=500)
+    # plt.savefig(path_save_phonon, dpi=500)
     plt.show()
 
 

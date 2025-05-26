@@ -42,6 +42,7 @@ from pulgon_tools_wip.utils import (
     Cn,
     S2n,
     sigmaH,
+    get_perms_from_ops,
     brute_force_generate_group_subsquent,
 )
 from pulgon_tools_wip.detect_point_group import LineGroupAnalyzer
@@ -52,7 +53,7 @@ from phonopy.units import VaspToTHz
 from pymatgen.core.operations import SymmOp
 import logging
 from ase import Atoms
-from utilities import get_adapted_matrix, divide_irreps, divide_over_irreps, divide_over_irreps_using_projectors
+from utilities import get_adapted_matrix, get_adapted_matrix_withparities, divide_irreps, divide_over_irreps, divide_over_irreps_using_projectors
 import matplotlib.colors as mcolors
 import multiprocessing
 from functools import partial
@@ -214,10 +215,10 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
                 factor_pos = np.repeat(np.repeat(factor_pos, 3, axis=0), 3, axis=1).astype(np.complex128)
                 if inv_index==True:
                     factor_pos = factor_pos.T
-                matrices = get_matrices_withPhase(atom_center, ops_car_sym, k_w_group)
+                matrices = get_matrices_withPhase(atom_center, ops_car_sym, k_w_group, symprec=1e-2)
                 matrices = matrices * np.exp(1j * k_w_group * factor_pos)
-                basis, dims = get_adapted_matrix(DictParams, num_atoms, matrices)
-
+                # basis, dims = get_adapted_matrix(DictParams, num_atoms, matrices)
+                basis, dims, _, _ = get_adapted_matrix_withparities(DictParams, num_atoms, matrices)
                 k_adapteds.append(k_w_group)
                 adapteds.append(basis)
                 dimensions.append(dims)
@@ -519,11 +520,17 @@ if __name__ == "__main__":
     family = 6
     obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
     nrot = obj.rot_sym[0][1]
-    num_irreps = int(nrot/2)+1
+    # num_irreps = int(nrot/2)+1   # no parity
+    num_irreps = int(nrot/2)+3   # with parity
     sym  = []
-    rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    sym.append(rots.affine_matrix)
-    sym.append(obj.get_generators()[1])
+
+    trans_op = np.round(cyclic.get_generators(), 6)
+    rots_op = np.round(obj.get_generators(), 6)
+    mats = np.vstack(([trans_op], rots_op))
+
+    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
+    # sym.append(rots.affine_matrix)
+    # sym.append(obj.get_generators()[1])
     ################ family 8 ######################
     # family = 8
     # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
@@ -538,7 +545,7 @@ if __name__ == "__main__":
     # sym.append(rots.affine_matrix)
     # sym.append(mirror.affine_matrix)
     ################################################
-    ops, order_ops = brute_force_generate_group_subsquent(sym)
+    ops, order_ops = brute_force_generate_group_subsquent(mats)
     if len(ops) != len(order_ops):
         logging.ERROR("len(ops) != len(order)")
 
@@ -692,4 +699,4 @@ if __name__ == "__main__":
 
     t3 = time.time()
     print("plot and save the figure: %s" % (t3 - t2))
-    plt.show()
+    # plt.show()

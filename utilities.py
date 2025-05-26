@@ -2,7 +2,7 @@ import numpy as np
 from ipdb import set_trace
 import ipdb
 import logging
-from pulgon_tools_wip.utils import fast_orth, get_character
+from pulgon_tools_wip.utils import fast_orth, get_character, get_character_withparities, get_character_num_withparities
 import copy
 import scipy.linalg as la
 from phonopy.units import VaspToTHz
@@ -73,37 +73,131 @@ def get_adapted_matrix(DictParams, num_atom, matrices):
             IR_ndim = 1
         else:
             IR_ndim = chara.shape[-1]
-        num_modes = 0
+        n_modes = 0
         projector = np.zeros((ndof, ndof), dtype=np.complex128)
         for kk in range(len(chara)):
             if IR_ndim==1:
                 chara_conj = chara[kk].conj()
             else:
                 chara_conj = chara[kk].trace().conj()
-            num_modes += chara_conj * matrices[kk].trace()
+            n_modes += chara_conj * matrices[kk].trace()
             projector += chara_conj * matrices[kk]
         projector = IR_ndim * projector / len(chara)
-        # num_modes = (num_modes / len(chara)).real     # Another way to get the dimention of the IR
+        # projector = projector / len(chara)
+        # num_modes = (n_modes / len(chara)).real     # Another way to get the dimention of the IR
         num_modes = projector.trace().real
+        if DictParams["family"]==13 and not np.isclose(DictParams["qpoints"], 0) and abs(DictParams["qpoints"]) != np.pi / DictParams["a"]:
+            num_modes = int(num_modes / 2)
 
         if np.isclose(num_modes, np.round(num_modes)):
             num_modes = np.round(num_modes).astype(np.int32)
         else:
             print("num_modes=", num_modes)
+            set_trace()
             logging.ERROR("num_modes is not an integer")
         u, s, vh = scipy.linalg.svd(projector)
 
+        # num_modes = np.sum(s>1e-2)
         basis = u[:,:num_modes]
         error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
+
+        # set_trace()
         if error>0.05:
-            logging.ERROR("the error of svd is too large, error=", error)
+            print("error=", error)
+            # set_trace()
+        #     logging.ERROR("the error of svd is too large, error=", error)
         dimension.append(basis.shape[1])
         adapted.append(basis)
+        # set_trace()
     adapted = np.concatenate(adapted, axis=1)
     if adapted.shape[0] != adapted.shape[1] or adapted.shape[0] != ndof:
+        set_trace()
         logging.ERROR("the shape of adapted is incorrect, adapted.shape=", adapted.shape)
-        # print("adapted.shape=", adapted.shape)
     return adapted, dimension
+
+
+def get_adapted_matrix_withparities(DictParams, num_atom, matrices):
+    """
+    Calculate the symmetry projection basis matrix for irreducible representation
+
+    Parameters
+    ----------
+    DictParams : dict
+        Dictionary of parameters:
+           {"qp": q/k point | float,
+            "nrot": The rotational quantum number of the structure "Cn" | int,
+            "order": The multiplication order from generators to symmetry operations | list,
+            "family": The line group family index | int,
+            "a": The period length in z direction | float}
+    num_atom : int
+        The number of atoms
+    matrices : list of numpy arrays
+        The matrices used to calculate the symmetry projection basis matrix
+
+    Returns
+    -------
+    adapted : numpy array
+        The symmetry projection basis matrix for irreducible representation
+    dimension : list of int
+        The dimensions of the irreducible representations
+    """
+    representation_mat, paras_values, paras_symbols = get_character_withparities(DictParams)
+    ndof = 3 * num_atom
+    adapted = []
+    dimension = []
+    for ii, rep_mat in enumerate(representation_mat):  # loop IR
+        if rep_mat.ndim ==1:
+            IR_ndim = 1
+        else:
+            IR_ndim = rep_mat.shape[-1]
+        n_modes = 0
+        projector = np.zeros((ndof, ndof), dtype=np.complex128)
+        for kk in range(len(rep_mat)):
+            if rep_mat.ndim == 1:
+                chara_conj = rep_mat[kk].conj()
+                # chara_conj = rep_mat[kk]
+            else:
+                chara_conj = rep_mat[kk].trace().conj()
+                # chara_conj = rep_mat[kk].trace()
+            n_modes += chara_conj * matrices[kk].trace()
+            projector += chara_conj * matrices[kk]
+        projector = IR_ndim * projector / len(rep_mat)
+        # projector = projector / len(rep_mat)
+        # num_modes = (n_modes / len(rep_mat)).real     # Another way to get the dimention of the IR
+        num_modes = projector.trace().real
+        if DictParams["family"]==13 and not np.isclose(DictParams["qpoints"], 0) and abs(DictParams["qpoints"]) != np.pi / DictParams["a"]:
+            num_modes = int(num_modes / 2)
+
+        if np.isclose(num_modes, np.round(num_modes)):
+            num_modes = np.round(num_modes).astype(np.int32)
+        else:
+            print("num_modes=", num_modes)
+            set_trace()
+            logging.ERROR("num_modes is not an integer")
+        u, s, vh = scipy.linalg.svd(projector)
+        basis = u[:,:num_modes]
+        error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
+
+        # set_trace()
+        # if DictParams['qpoints']==0:
+        #     set_trace()
+
+        if error>0.05:
+            print("ii=", ii, "error=", error)
+            # set_trace()
+            # logging.ERROR("the error of svd is too large, error=", error)
+        dimension.append(basis.shape[1])
+        adapted.append(basis)
+        # set_trace()
+    adapted = np.concatenate(adapted, axis=1)
+    if adapted.shape[0] != adapted.shape[1] or adapted.shape[0] != ndof:
+        set_trace()
+        logging.ERROR("the shape of adapted is incorrect, adapted.shape=", adapted.shape)
+    # set_trace()
+    return adapted, dimension, paras_values, paras_symbols
+
+
+
 
 
 def divide_irreps(vec, adapted, dimensions):
@@ -360,18 +454,63 @@ def get_modified_adapted_matrix(DictParams, num_atom, matrices):
         u, s, vh = scipy.linalg.svd(projector)
         basis = u[:,:num_modes]
         error = 1 - np.abs(s[num_modes - 1] - s[num_modes]) / np.abs(s[num_modes - 1])
+        # set_trace()
         if error>0.05:
-            logging.ERROR("the error of svd is too large, error=", error)
+            print(error)
+            # logging.ERROR("the error of svd is too large, error=", error)
         if IR_ndim != 1:
-            basis = np.array(np.array_split(basis, 2, axis=0))
+            basis = np.array(np.array_split(basis, int(basis.shape[0] / (num_atom*3)), axis=0))
             basis = scipy.linalg.orth(np.concatenate(basis, axis=1))
         dimension.append(basis.shape[1])
         adapted.append(basis)
+
     adapted = np.concatenate(adapted, axis=1)
     if adapted.shape[0] != adapted.shape[1]:
+        set_trace()
         logging.ERROR("the shape of adapted is incorrect, shape=", adapted.shape)
     return adapted, dimension
 
 
+def get_adapted_eigenmodes(D, adapted, dimensions):
+    """
+    Calculate the frequencies and eigenvectors at a given qpoint
+    using the symmetry-adapted basis.
+
+    Parameters
+    ----------
+    D : array_like
+        The dynamical matrix at the given qpoint.
+    adapted : numpy array
+        The symmetry projection basis matrix for irreducible representation.
+    dimensions : list of int
+        The dimensions of the irreducible representations.
+
+    Returns
+    -------
+    freq : numpy array
+        The frequencies at the given qpoint.
+    eigenvecs : numpy array
+        The eigenvectors at the given qpoint.
+    """
+    D = adapted.conj().T @ D @ adapted
+    start = 0
+    tmp_eigvec, tmp_band = [], []
+    for ir in range(len(dimensions)):
+        end = start + dimensions[ir]
+        block = D[start:end, start:end]
+        eig, eigvecs = np.linalg.eigh(block)
+        e = (
+                np.sqrt(np.abs(eig))
+                * np.sign(eig)
+                * VaspToTHz
+        ).tolist()
+
+        tmp_vec = adapted[:, start:end] @ eigvecs
+        tmp_eigvec.append(tmp_vec)
+        tmp_band.append(e)
+        start = end
+    freq = np.concatenate(tmp_band)
+    eigenvecs = np.concatenate(tmp_eigvec, axis=1)
+    return freq, eigenvecs
 
 
