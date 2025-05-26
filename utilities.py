@@ -165,8 +165,8 @@ def get_adapted_matrix_withparities(DictParams, num_atom, matrices):
         # projector = projector / len(rep_mat)
         # num_modes = (n_modes / len(rep_mat)).real     # Another way to get the dimention of the IR
         num_modes = projector.trace().real
-        if DictParams["family"]==13 and not np.isclose(DictParams["qpoints"], 0) and abs(DictParams["qpoints"]) != np.pi / DictParams["a"]:
-            num_modes = int(num_modes / 2)
+        # if DictParams["family"]==13 and not np.isclose(DictParams["qpoints"], 0) and abs(DictParams["qpoints"]) != np.pi / DictParams["a"]:
+        #     num_modes = int(num_modes / 2)
 
         if np.isclose(num_modes, np.round(num_modes)):
             num_modes = np.round(num_modes).astype(np.int32)
