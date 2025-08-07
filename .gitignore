@@ -34,6 +34,17 @@ MANIFEST
 *.npy
 plot_*.py
 *.bak
+AGF-*
+nano*
+copy*
+animate*
+POSCAR
+detailed*
+generalized*
+selection_rules*
+test*
+torun*
+transmission*
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

@@ -368,7 +368,6 @@ if __name__ == "__main__":
     VLC = scatter_blocks["Vlc"]
     VCR = scatter_blocks["Vcr"]
 
-
     cells = max(defect_indices) + 1
     idx_scatter = np.where(defect_indices==int((cells-1)/2))[0]
 
