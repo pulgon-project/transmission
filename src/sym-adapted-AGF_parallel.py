@@ -473,7 +473,7 @@ if __name__ == "__main__":
     atom_center, family, nrot, aL, ops_car_sym, order_ops = get_linegroup_symmetry_dataset(path_poscar)
     num_atoms = len(atom_center.numbers)
 
-    num_irreps = int(nrot/2)+1
+    num_irreps = int(nrot) + 2
 
 
     LR_blocks = np.load(path_LR_blocks)
@@ -554,7 +554,6 @@ if __name__ == "__main__":
     with multiprocessing.Pool(n_procs) as pl:
         output = pl.starmap(partial_transmission, cob_omega)
 
-
     NLp = np.empty_like(inc_omega)
     k_w = np.zeros_like(inc_omega, dtype=object)
     trans_modes = np.zeros_like(inc_omega, dtype=object)
@@ -583,18 +582,22 @@ if __name__ == "__main__":
 
     colors = [value for key, value in mcolors.XKCD_COLORS.items()]
 
-    labels = []
-    for ii in range(40):
-        labels.append("m=%d" %ii)
-
-
     linestyle_tuple = ['solid',
         ('long dash with offset', (5, (10, 3))),
         ('loosely dashed', (0, (5, 10))),]
 
     # NLp_irreps = np.array([NLp_irreps[2], NLp_irreps[1] + NLp_irreps[3], NLp_irreps[0] + NLp_irreps[4], NLp_irreps[5]])
     for ii, freq in enumerate(NLp_irreps):
-        plt.plot(np.array(inc_omega), freq, label=labels[ii], color=colors[ii])
+        if ii==0:
+            plt.plot(np.array(inc_omega), freq, label=r"$m=%d, \Pi_{v}=%d$" % (ii, -1) , color=colors[ii])
+        elif ii==1:
+            plt.plot(np.array(inc_omega), freq, label=r"$m=%d, \Pi_{v}=%d$" % (ii, 1) , color=colors[ii])
+        elif ii==NLp_irreps.shape[0]-1:
+            plt.plot(np.array(inc_omega), freq, label=r"$m=%d, \Pi_{v}=%d$" % (ii-2, 1) , color=colors[ii])
+        elif ii==NLp_irreps.shape[0]-2:
+            plt.plot(np.array(inc_omega), freq, label=r"$m=%d, \Pi_{v}=%d$" % (ii-2, -1) , color=colors[ii])
+        else:
+            plt.plot(np.array(inc_omega), freq, label=r"$m=%d$" % (ii-2) , color=colors[ii])
 
     plt.plot(inc_omega, NLp, label=r"$Pure-N_{L+}$", color="grey")
     plt.plot(np.array(inc_omega), trans, label="Caroli", color=colors[ii+1], linestyle=linestyle_tuple[0])
