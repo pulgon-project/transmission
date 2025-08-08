@@ -600,7 +600,7 @@ if __name__ == "__main__":
             plt.plot(np.array(inc_omega), freq, label=r"$m=%d$" % (ii-2) , color=colors[ii])
 
     plt.plot(inc_omega, NLp, label=r"$Pure-N_{L+}$", color="grey")
-    plt.plot(np.array(inc_omega), trans, label="Caroli", color=colors[ii+1], linestyle=linestyle_tuple[0])
+    # plt.plot(np.array(inc_omega), trans, label="Caroli", color=colors[ii+1], linestyle=linestyle_tuple[0])
     plt.plot(np.array(inc_omega), trans_check, label="modes_sum", color=colors[ii+2], linestyle=linestyle_tuple[1][1])
     plt.plot(np.array(inc_omega), NLp_sum, label="Irreps_sum", color=colors[ii+3], linestyle=linestyle_tuple[2][1])
 
