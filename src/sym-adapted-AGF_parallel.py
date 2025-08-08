@@ -473,7 +473,7 @@ if __name__ == "__main__":
     atom_center, family, nrot, aL, ops_car_sym, order_ops = get_linegroup_symmetry_dataset(path_poscar)
     num_atoms = len(atom_center.numbers)
 
-    num_irreps = int(nrot) + 2
+    num_irreps = int(nrot) + 3
 
 
     LR_blocks = np.load(path_LR_blocks)
