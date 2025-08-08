@@ -13,16 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 import os.path
-import copy
 import argparse
 import time
-
-import tqdm
 import numpy as np
-import numpy.linalg as nla
-import scipy as sp
 import scipy.linalg as la
 import ase.io
 import ase.data
@@ -32,37 +26,25 @@ import phonopy
 
 import decimation
 from ipdb import set_trace
-from pulgon_tools_wip.utils import (
-    fast_orth,
-    get_character,
-    get_matrices,
+from pulgon_tools.utils import (
     get_matrices_withPhase,
     find_axis_center_of_nanotube,
-    dimino_affine_matrix_and_subsquent,
-    Cn,
-    S2n,
-    sigmaH,
-    get_perms_from_ops,
     brute_force_generate_group_subsquent,
 )
-from pulgon_tools_wip.detect_point_group import LineGroupAnalyzer
-from pulgon_tools_wip.detect_generalized_translational_group import CyclicGroupAnalyzer
-from phonopy.phonon.band_structure import get_band_qpoints_and_path_connections
-from phonopy.units import VaspToTHz
-
+from pulgon_tools.detect_point_group import LineGroupAnalyzer
+from pulgon_tools.detect_generalized_translational_group import CyclicGroupAnalyzer
 from pymatgen.core.operations import SymmOp
 import logging
-from ase import Atoms
-from utilities import get_adapted_matrix, get_adapted_matrix_withparities, divide_irreps, divide_over_irreps, divide_over_irreps_using_projectors
+from utilities import get_adapted_matrix_withparities, divide_over_irreps, divide_over_irreps_using_projectors
 import matplotlib.colors as mcolors
 import multiprocessing
 from functools import partial
-
+from utilities import get_linegroup_symmetry_dataset
 
 matplotlib.rcParams["font.size"] = 16.0
 
 
-def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR, args):
+def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR, num_atoms, args):
     """
     Computes the transmission coefficient by sym-adapted AGF of a system given
     Hamiltonian and coupling matrices.
@@ -217,7 +199,8 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
                     factor_pos = factor_pos.T
                 matrices = get_matrices_withPhase(atom_center, ops_car_sym, k_w_group, symprec=1e-2)
                 matrices = matrices * np.exp(1j * k_w_group * factor_pos)
-                # basis, dims = get_adapted_matrix(DictParams, num_atoms, matrices)
+
+                num_atoms = DictParams['num_atoms']
                 basis, dims, _, _ = get_adapted_matrix_withparities(DictParams, num_atoms, matrices)
                 k_adapteds.append(k_w_group)
                 adapteds.append(basis)
@@ -225,7 +208,7 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
 
             group_vectors = vectors[:, lo:hi]
             try:
-                adapted_vecs = divide_over_irreps(group_vectors, basis, dims, rcond=rcond)
+                adapted_vecs = divide_over_irreps(group_vectors, basis, dims, rcond=0.2)
             except Exception as e:
                 adapted_vecs = divide_over_irreps_using_projectors(group_vectors, basis, dims)
 
@@ -240,7 +223,7 @@ def compute_sym_transmission(iomega, omega, HL, TL, HR, TR, VLC, KC, VCR, aL, aR
 
     # # Solve the corresponding eigenvalue equations for the leads.
     # # Look for degenerate modes and orthonormalize them.
-    DictParams = {"nrot": nrot, "order": order_ops, "family": family, "a": aL}  # F:2,4, 13
+    DictParams = {"nrot": nrot, "order": order_ops, "family": family, "a": aL, "num_atoms": num_atoms}  # F:2,4, 13
 
     k_adapteds, adapteds, dimensions = [], [], []
     inv_ind1 = True
@@ -466,10 +449,6 @@ if __name__ == "__main__":
     parser.add_argument("data_directory", help="directory")
     args = parser.parse_args()
 
-    print("*******************")
-    rcond = 0.2
-    print("rcond =", rcond)
-    print("*******************")
     t0 = time.time()
 
     path_directory = args.data_directory
@@ -484,79 +463,18 @@ if __name__ == "__main__":
     path_savedata = os.path.join(path_directory, "transmission_irreps.npz")
 
     ######################### projector ##########################
-    # phonon = phonopy.load(phonopy_yaml=path_phonopy_pure, is_compact_fc=True)
     phonon = phonopy.load(phonopy_yaml=path_phonopy_pure, force_constants_filename=path_fc_continum, is_compact_fc=True)
-    poscar_phonopy = phonon.primitive
-    poscar_ase = Atoms(cell=poscar_phonopy.cell, positions=poscar_phonopy.positions, numbers=poscar_phonopy.numbers)
-    cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
-    # atom = cyclic._primitive
-    atom = poscar_ase
-    atom_center = find_axis_center_of_nanotube(atom)
+    # poscar_phonopy = phonon.primitive
+    # poscar_ase = Atoms(cell=poscar_phonopy.cell, positions=poscar_phonopy.positions, numbers=poscar_phonopy.numbers)
+    # cyclic = CyclicGroupAnalyzer(poscar_ase, tolerance=1e-2)
+    # atom = poscar_ase
+    # atom_center = find_axis_center_of_nanotube(atom)
 
-    ################### family 4 #####################
-    # family = 4
-    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    # nrot = obj.get_rotational_symmetry_number()
-    # num_irreps = nrot * 2
-    # sym = []
-    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    # sym.append(tran.affine_matrix)
-    # rot = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # sym.append(rot.affine_matrix)
-    # mirror = SymmOp.reflection([0,0,1], [0,0,0.25])
-    # sym.append(mirror.affine_matrix)
-    ################### family 2 #############
-    # family = 2
-    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    # nrot = obj.get_rotational_symmetry_number()
-    # num_irreps = nrot * 2
-    # sym = []
-    # # pg1 = obj.get_generators()  # change the order to satisfy the character table
-    # # sym.append(pg1[1])
-    # rots = SymmOp.from_rotation_and_translation(S2n(nrot), [0, 0, 0])
-    # sym.append(rots.affine_matrix)
-    #########################################
-    ################## family 6 ########################
-    family = 6
-    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    nrot = obj.rot_sym[0][1]
-    # num_irreps = int(nrot/2)+1   # no parity
-    num_irreps = int(nrot/2)+3   # with parity
-    sym  = []
+    atom_center, family, nrot, aL, ops_car_sym, order_ops = get_linegroup_symmetry_dataset(path_poscar)
+    num_atoms = len(atom_center.numbers)
 
-    trans_op = np.round(cyclic.get_generators(), 6)
-    rots_op = np.round(obj.get_generators(), 6)
-    mats = np.vstack(([trans_op], rots_op))
+    num_irreps = int(nrot/2)+1
 
-    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # sym.append(rots.affine_matrix)
-    # sym.append(obj.get_generators()[1])
-    ################ family 8 ######################
-    # family = 8
-    # obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
-    # nrot = obj.get_rotational_symmetry_number()
-    # sym  = []
-    # num_irreps = nrot + 1
-    # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/2])
-    # # tran = SymmOp.from_rotation_and_translation(Cn(2*nrot), [0, 0, 1/4])
-    # rots = SymmOp.from_rotation_and_translation(Cn(nrot), [0, 0, 0])
-    # mirror = SymmOp.reflection([1,0,0], [0,0,0])
-    # sym.append(tran.affine_matrix)
-    # sym.append(rots.affine_matrix)
-    # sym.append(mirror.affine_matrix)
-    ################################################
-    ops, order_ops = brute_force_generate_group_subsquent(mats)
-    if len(ops) != len(order_ops):
-        logging.ERROR("len(ops) != len(order)")
-
-    ops_car_sym = []
-    for op in ops:
-        tmp_sym = SymmOp.from_rotation_and_translation(
-            op[:3, :3], op[:3, 3] * cyclic._pure_trans
-        )
-        ops_car_sym.append(tmp_sym)
-    # matrices = get_matrices(atom_center, ops_car_sym)
-    num_atoms = len(phonon.primitive.numbers)
 
     LR_blocks = np.load(path_LR_blocks)
     scatter_blocks = np.load(path_scatter_blocks)
@@ -628,6 +546,7 @@ if __name__ == "__main__":
         VCR=VCR,
         aL=aL,
         aR=aR,
+        num_atoms=num_atoms,
         args=args
     )
     cob_omega = [(index, value) for index, value in enumerate(inc_omega)]
@@ -635,9 +554,7 @@ if __name__ == "__main__":
     with multiprocessing.Pool(n_procs) as pl:
         output = pl.starmap(partial_transmission, cob_omega)
 
-    # NRp = np.empty_like(inc_omega)
-    # NLm = np.empty_like(inc_omega)
-    # NRm = np.empty_like(inc_omega)
+
     NLp = np.empty_like(inc_omega)
     k_w = np.zeros_like(inc_omega, dtype=object)
     trans_modes = np.zeros_like(inc_omega, dtype=object)
@@ -665,13 +582,10 @@ if __name__ == "__main__":
     fig, axs = plt.subplots(figsize=(12, 8))
 
     colors = [value for key, value in mcolors.XKCD_COLORS.items()]
-    # colors = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'magenta', 'cyan', 'yellow', 'pink', 'olive', 'slategray', 'darkkhaki', 'yellowgreen']
-    # color = plt.cm.viridis(np.linspace(0, 1, len(frequencies)))
 
     labels = []
     for ii in range(40):
-        labels.append("|m|=%d" %ii)
-    # labels = ["|m|=0","|m|=1","|m|=2","|m|=3","|m|=4","|m|=5","|m|=6","|m|=7","|m|=8","|m|=9", "|m|=10", "|m|=11","|m|=12", "|m|=13", "|m|=14"]
+        labels.append("m=%d" %ii)
 
 
     linestyle_tuple = ['solid',

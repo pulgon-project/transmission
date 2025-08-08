@@ -10,9 +10,9 @@ from ipdb import set_trace
 from matplotlib.pyplot import legend
 from phonopy.phonon.band_structure import get_band_qpoints_and_path_connections
 from phonopy.units import VaspToTHz
-from pulgon_tools_wip.detect_generalized_translational_group import CyclicGroupAnalyzer
-from pulgon_tools_wip.detect_point_group import LineGroupAnalyzer
-from pulgon_tools_wip.utils import (
+from pulgon_tools.detect_generalized_translational_group import CyclicGroupAnalyzer
+from pulgon_tools.detect_point_group import LineGroupAnalyzer
+from pulgon_tools.utils import (
     get_matrices,
     get_matrices_withPhase,
     find_axis_center_of_nanotube,
@@ -22,7 +22,7 @@ from pulgon_tools_wip.utils import (
     brute_force_generate_group_subsquent,
     get_symbols_from_ops
 )
-from pulgon_tools_wip.line_group_table import get_family_Num_from_sym_symbol
+from pulgon_tools.line_group_table import get_family_Num_from_sym_symbol
 from pymatgen.core.operations import SymmOp
 from sparse import astype
 from tqdm import tqdm

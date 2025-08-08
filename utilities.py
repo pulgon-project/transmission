@@ -2,12 +2,22 @@ import numpy as np
 from ipdb import set_trace
 import ipdb
 import logging
-from pulgon_tools_wip.utils import fast_orth, get_character, get_character_withparities, get_character_num_withparities
+from pulgon_tools.utils import (get_character,
+                                get_character_withparities,
+                                find_axis_center_of_nanotube,
+                                brute_force_generate_group_subsquent)
+from pulgon_tools.line_group_table import get_family_Num_from_sym_symbol
+from pulgon_tools.detect_generalized_translational_group import CyclicGroupAnalyzer
+from pulgon_tools.detect_point_group import LineGroupAnalyzer
 import copy
 import scipy.linalg as la
 from phonopy.units import VaspToTHz
 import scipy
 from sympy.physics.quantum import TensorProduct
+from pymatgen.core import SymmOp
+from ase.io.vasp import read_vasp
+from ase.atoms import Atoms
+from ase.atom import Atom
 
 
 def get_branchNum_from_freq(y,xy, direction=1, tolerance=1e-5):
@@ -512,5 +522,39 @@ def get_adapted_eigenmodes(D, adapted, dimensions):
     freq = np.concatenate(tmp_band)
     eigenvecs = np.concatenate(tmp_eigvec, axis=1)
     return freq, eigenvecs
+
+
+
+
+def get_linegroup_symmetry_dataset(poscar):
+    if type(poscar)==str:
+        atom = read_vasp(poscar)
+    elif type(poscar)==Atom or type(poscar)==Atoms:
+        atom = poscar
+    else:
+        print("Unknown input")
+
+    atom_center = find_axis_center_of_nanotube(atom)
+    cyclic = CyclicGroupAnalyzer(atom_center, tolerance=1e-2)
+    obj = LineGroupAnalyzer(atom_center, tolerance=1e-2)
+    nrot = obj.get_rotational_symmetry_number()
+    aL = atom_center.cell[2, 2]
+    trans_sym = cyclic.cyclic_group[0]
+    rota_sym = obj.sch_symbol
+    trans_op = np.round(cyclic.get_generators(), 6)
+    rots_op = np.round(obj.get_generators(), 6)
+    mats = np.vstack(([trans_op], rots_op))
+    # res = get_symbols_from_ops(rots_op)
+    ops, order_ops = brute_force_generate_group_subsquent(mats, symec=1e-2)
+    ops_car_sym = []
+    for op in ops:
+        tmp_sym = SymmOp.from_rotation_and_translation(
+            op[:3, :3], op[:3, 3] * aL
+        )
+        ops_car_sym.append(tmp_sym)
+    family = get_family_Num_from_sym_symbol(trans_sym, rota_sym)
+    return atom_center, family, nrot, aL, ops_car_sym, order_ops
+
+
 
 

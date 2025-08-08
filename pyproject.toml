@@ -1,0 +1,31 @@
+# -*- coding: utf-8 -*-
+
+[build-system]
+requires = [
+  "setuptools>=61.0",
+  "wheel",
+  "cython",
+  "numpy"
+]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "decimation"
+version = "0.0.1"
+description = "C++ implementation of the decimation routines"
+authors = [
+  { name = "Yujie Cen", email = "yujie.cen@tuwien.ac.at" }
+]
+license = {text = "Apache-2.0"}
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "ase",
+    "tqdm",
+    "phonopy",
+    "ipdb",
+    "pulgon-tools",
+]
+requires-python = ">=3.7"

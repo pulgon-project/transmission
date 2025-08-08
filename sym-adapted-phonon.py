@@ -4,14 +4,12 @@ from ase import Atoms
 import matplotlib.pyplot as plt
 import numpy as np
 import phonopy
-import pretty_errors
-from ase.io.vasp import read_vasp, write_vasp
 from ipdb import set_trace
 from phonopy.phonon.band_structure import get_band_qpoints_and_path_connections
 from phonopy.units import VaspToTHz
-from pulgon_tools_wip.detect_generalized_translational_group import CyclicGroupAnalyzer
-from pulgon_tools_wip.detect_point_group import LineGroupAnalyzer
-from pulgon_tools_wip.utils import (
+from pulgon_tools.detect_generalized_translational_group import CyclicGroupAnalyzer
+from pulgon_tools.detect_point_group import LineGroupAnalyzer
+from pulgon_tools.utils import (
     get_matrices,
     get_matrices_withPhase,
     find_axis_center_of_nanotube,
@@ -21,16 +19,10 @@ from pulgon_tools_wip.utils import (
     brute_force_generate_group_subsquent,
     get_symbols_from_ops
 )
-from pulgon_tools_wip.line_group_table import get_family_Num_from_sym_symbol
-from pymatgen.core.operations import SymmOp
-from sparse import astype
+from pulgon_tools.line_group_table import get_family_Num_from_sym_symbol
 from tqdm import tqdm
-from utilities import get_adapted_matrix, get_adapted_matrix_withparities, get_modified_adapted_matrix
-import decimation
-from spglib import get_symmetry_dataset
-import ase
+from utilities import get_adapted_matrix, get_adapted_matrix_withparities
 import argparse
-import matplotlib.colors as mcolors
 from pymatgen.core.operations import SymmOp
 
 

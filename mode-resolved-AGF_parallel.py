@@ -462,7 +462,7 @@ if __name__ == "__main__":
 
     plt.colorbar(scatter, label='Values')
     plt.legend(loc="best")
-    plt.savefig(path_savfig, dpi=600)
+    plt.savefig(path_savfig, dpi=500)
 
     t1 = time.time()
     print("total time spend: ", t1-t0)
